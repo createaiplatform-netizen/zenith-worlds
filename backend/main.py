@@ -5,15 +5,22 @@ import os
 
 app = FastAPI()
 
+API_KEY = os.getenv("ALPACA_API_KEY")
+API_SECRET = os.getenv("ALPACA_API_SECRET")
+BASE_URL = "https://paper-api.alpaca.markets"
+
 api = tradeapi.REST(
-    os.getenv("ALPACA_API_KEY"),
-    os.getenv("ALPACA_API_SECRET"),
-    "https://paper-api.alpaca.markets",
+    API_KEY,
+    API_SECRET,
+    BASE_URL,
     api_version="v2"
 )
 
 def brain(prices):
     prices = np.array(prices)
+
+    if len(prices) < 20:
+        return "HOLD"
 
     short = np.mean(prices[-5:])
     long = np.mean(prices[-20:])
@@ -54,3 +61,7 @@ def cycle(symbol: str = "AAPL"):
         "qty": qty,
         "price": price
     }
+
+@app.get("/status")
+def status():
+    return {"status": "running"}
