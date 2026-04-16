@@ -1,15 +1,15 @@
 import streamlit as st
 import alpaca_trade_api as tradeapi
 import numpy as np
-import pandas as pd
+import time
 from datetime import datetime
 
-st.set_page_config(page_title="Ultra AI Trading Brain", layout="wide")
+st.set_page_config(page_title="Autonomous AI Brain", layout="wide")
 
-st.title("🧠 Ultra AI Trading Brain System")
+st.title("🧠 Autonomous AI Trading Brain")
 
 # =========================
-# INPUT KEYS
+# INPUTS
 # =========================
 
 api_key = st.text_input("API Key", type="password")
@@ -20,64 +20,70 @@ base_url = st.selectbox(
     ["https://paper-api.alpaca.markets", "https://api.alpaca.markets"]
 )
 
-# =========================
-# GLOBAL SAFETY SETTINGS
-# =========================
-
-MAX_RISK_PER_TRADE = 0.05   # 5%
-MAX_DAILY_LOSS = 100        # hard stop (paper logic guard)
-TRADE_LOCK = False
+symbol = st.text_input("Symbol", "AAPL")
 
 # =========================
-# AI CORE ENGINE
+# MEMORY (SESSION STATE)
+# =========================
+
+if "trade_log" not in st.session_state:
+    st.session_state.trade_log = []
+
+if "daily_pnl" not in st.session_state:
+    st.session_state.daily_pnl = 0
+
+if "kill_switch" not in st.session_state:
+    st.session_state.kill_switch = False
+
+# =========================
+# RISK SYSTEM
+# =========================
+
+MAX_DAILY_LOSS = -100  # hard stop
+RISK_PER_TRADE = 0.05
+
+def risk_guard(pnl):
+    if pnl <= MAX_DAILY_LOSS:
+        st.session_state.kill_switch = True
+        return False
+    return True
+
+# =========================
+# AI BRAIN (MULTI SIGNAL)
 # =========================
 
 def brain(prices):
     prices = np.array(prices)
 
-    if len(prices) < 10:
-        return "HOLD", 0
-
-    short_ma = np.mean(prices[-5:])
-    long_ma = np.mean(prices[-10:])
+    short = np.mean(prices[-5:])
+    long = np.mean(prices[-15:])
     momentum = prices[-1] - prices[-3]
+    volatility = np.std(prices[-10:])
 
-    score = 0
+    vote = 0
 
-    # trend
-    if short_ma > long_ma:
-        score += 1
+    # Trend
+    vote += 1 if short > long else -1
+
+    # Momentum
+    vote += 1 if momentum > 0 else -1
+
+    # Volatility filter
+    vote += -1 if volatility > np.mean(prices[-10:]) * 0.03 else 0
+
+    if vote >= 2:
+        return "BUY", vote
+    elif vote <= -2:
+        return "SELL", vote
     else:
-        score -= 1
-
-    # momentum
-    if momentum > 0:
-        score += 1
-    else:
-        score -= 1
-
-    # volatility check
-    vol = np.std(prices[-10:])
-    if vol > np.mean(prices[-10:]) * 0.02:
-        score -= 1
-
-    if score >= 2:
-        return "BUY", score
-    elif score <= -2:
-        return "SELL", score
-    else:
-        return "HOLD", score
-
+        return "HOLD", vote
 
 # =========================
-# RISK ENGINE
+# POSITION SIZING
 # =========================
 
-def position_size(cash, price):
-    risk_amount = cash * MAX_RISK_PER_TRADE
-    qty = max(int(risk_amount / price), 1)
-    return qty
-
+def size(cash, price):
+    return max(int((cash * RISK_PER_TRADE) / price), 1)
 
 # =========================
 # CONNECT
@@ -85,7 +91,7 @@ def position_size(cash, price):
 
 api = None
 
-if st.button("START AI BRAIN"):
+if st.button("START AUTONOMOUS BRAIN"):
 
     if api_key and api_secret:
 
@@ -98,83 +104,33 @@ if st.button("START AI BRAIN"):
             )
 
             account = api.get_account()
-
-            st.success("AI Brain ONLINE")
-
             cash = float(account.cash)
 
+            st.success("AI Brain ACTIVE")
+
             col1, col2, col3 = st.columns(3)
-
-            col1.metric("Status", account.status)
-            col2.metric("Buying Power", account.buying_power)
-            col3.metric("Cash", account.cash)
+            col1.metric("Cash", account.cash)
+            col2.metric("Status", account.status)
+            col3.metric("Daily PnL", st.session_state.daily_pnl)
 
             # =========================
-            # SYMBOL INPUT
+            # AUTONOMOUS LOOP (SIMULATED CYCLE)
             # =========================
 
-            symbol = st.text_input("Symbol", "AAPL")
-
-            bars = api.get_bars(symbol, "1Min", limit=50)
+            bars = api.get_bars(symbol, "1Min", limit=30)
             prices = [b.c for b in bars]
 
             decision, score = brain(prices)
 
             st.subheader("🧠 AI Decision Engine")
             st.write("Decision:", decision)
-            st.write("Confidence Score:", score)
+            st.write("Score:", score)
 
-            current_price = prices[-1]
-            qty = position_size(cash, current_price)
+            price = prices[-1]
+            qty = size(cash, price)
 
-            st.write("Price:", current_price)
-            st.write("Position Size:", qty)
-
-            # =========================
-            # EXECUTION LAYER
-            # =========================
-
-            st.subheader("⚡ Execution Layer")
-
-            if decision == "BUY":
-                if st.button("EXECUTE BUY"):
-                    api.submit_order(
-                        symbol=symbol,
-                        qty=qty,
-                        side="buy",
-                        type="market",
-                        time_in_force="day"
-                    )
-                    st.success("BUY EXECUTED")
-
-            elif decision == "SELL":
-                if st.button("EXECUTE SELL"):
-                    api.submit_order(
-                        symbol=symbol,
-                        qty=qty,
-                        side="sell",
-                        type="market",
-                        time_in_force="day"
-                    )
-                    st.success("SELL EXECUTED")
-
-            else:
-                st.info("HOLD POSITION")
+            st.write("Price:", price)
+            st.write("Qty:", qty)
 
             # =========================
-            # PORTFOLIO
-            # =========================
-
-            st.subheader("📦 Portfolio")
-
-            positions = api.list_positions()
-
-            for p in positions:
-                st.write(f"{p.symbol} | Qty: {p.qty} | P/L: {p.unrealized_pl}")
-
-        except Exception as e:
-            st.error("AI Brain failure")
-            st.write(e)
-
-    else:
-        st.warning("Enter API keys")
+            # K
