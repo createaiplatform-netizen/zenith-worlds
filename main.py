@@ -1,58 +1,66 @@
-from flask import Flask, jsonify
-import requests
-import time
+import streamlit as st
+import alpaca_trade_api as tradeapi
 
-app = Flask(__name__)
+# ==============================
+# SAFE CONFIG LOADER
+# ==============================
 
-state = {
-    "last_price": None,
-    "price": 0,
-    "signal": "HOLD"
-}
+def get_config():
+    """
+    Pulls credentials safely from Streamlit Secrets.
+    Falls back to environment variables if needed.
+    """
 
-SYMBOL = "XRP-USD"
+    key = st.secrets.get("APCA_API_KEY_ID", None)
+    secret = st.secrets.get("APCA_API_SECRET_KEY", None)
+    base_url = st.secrets.get("BASE_URL", "https://paper-api.alpaca.markets")
 
-def get_price():
-    r = requests.get("https://api.coinbase.com/v2/prices/XRP-USD/spot")
-    return float(r.json()["data"]["amount"])
+    if not key or not secret:
+        st.error("Missing Alpaca API credentials in Streamlit Secrets.")
+        st.stop()
 
-def compute_signal(price):
-    if state["last_price"] is None:
-        return "HOLD"
-
-    change = (price - state["last_price"]) / state["last_price"]
-
-    if change > 0.01:
-        return "BUY"
-    elif change < -0.01:
-        return "SELL"
-    return "HOLD"
+    return key, secret, base_url
 
 
-@app.route("/data")
-def data():
-    return jsonify(state)
+# ==============================
+# INIT ALPACA CLIENT
+# ==============================
+
+API_KEY, API_SECRET, BASE_URL = get_config()
+
+api = tradeapi.REST(
+    API_KEY,
+    API_SECRET,
+    base_url=BASE_URL,
+    api_version="v2"
+)
 
 
-def update_loop():
-    while True:
-        try:
-            price = get_price()
-            signal = compute_signal(price)
+# ==============================
+# TEST CONNECTION
+# ==============================
 
-            state["last_price"] = price
-            state["price"] = price
-            state["signal"] = signal
-
-            time.sleep(5)
-
-        except Exception as e:
-            print("error:", e)
-            time.sleep(5)
+def test_connection():
+    try:
+        account = api.get_account()
+        return account
+    except Exception as e:
+        st.error(f"Alpaca connection failed: {e}")
+        return None
 
 
-if __name__ == "__main__":
-    from threading import Thread
+# ==============================
+# STREAMLIT UI
+# ==============================
 
-    Thread(target=update_loop, daemon=True).start()
-    app.run(host="0.0.0.0", port=10000)
+st.title("📊 Alpaca Trading Dashboard")
+
+if st.button("Test Connection"):
+    account = test_connection()
+
+    if account:
+        st.success("Connected to Alpaca successfully!")
+
+        st.write("Account Status:", account.status)
+        st.write("Buying Power:", account.buying_power)
+        st.write("Cash:", account.cash)
