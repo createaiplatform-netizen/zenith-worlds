@@ -1,13 +1,10 @@
 import time
 import random
-import os
 
-print("ZENITH RUNNING (GITHUB LOG MODE)")
-
-log_file = "run_log.txt"
+log = "ZENITH RUNNING\n"
 
 while True:
-    price = random.uniform(0.5, 1.5)
+    price = round(random.uniform(0.5, 1.5), 4)
 
     if price > 1.2:
         signal = "BUY"
@@ -16,11 +13,7 @@ while True:
     else:
         signal = "HOLD"
 
-    line = f"PRICE: {price} | SIGNAL: {signal}\n"
-
-    print(line)
-
-    with open(log_file, "a") as f:
-        f.write(line)
+    log += f"PRICE: {price} | SIGNAL: {signal}\n"
+    print(f"PRICE: {price} | SIGNAL: {signal}")
 
     time.sleep(3)
