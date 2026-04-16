@@ -1,7 +1,19 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Zenith Live</title>
+</head>
+<body style="background:black;color:#00ff88;font-family:monospace;display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;">
+
+<h2>ZENITH LIVE SYSTEM</h2>
+<div id="price">PRICE: --</div>
+<div id="signal">SIGNAL: --</div>
+
 <script>
 async function tick(){
   try {
-    const res = await fetch("https://YOUR-RENDER-URL.onrender.com/data");
+    const res = await fetch("https://YOUR-REPLIT-URL.replit.app/data");
     const data = await res.json();
 
     document.getElementById("price").innerText = "PRICE: " + data.price;
@@ -15,3 +27,6 @@ async function tick(){
 setInterval(tick, 3000);
 tick();
 </script>
+
+</body>
+</html>
