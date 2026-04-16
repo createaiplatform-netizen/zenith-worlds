@@ -1,54 +1,70 @@
 import streamlit as st
-import random
-import hashlib
+import time
 import pandas as pd
+import random
 
-# --- ZENITH CORE CONFIG ---
-st.set_page_config(page_title="Zenith: The Jubilee Portal", page_icon="💎", layout="wide")
+# --- ZENITH COMMAND PROTOCOL ---
+st.set_page_config(page_title="Zenith: Global Jubilee Command", page_icon="⚖️", layout="wide")
 
-# --- QUANTUM FINANCIAL FUNCTIONS ---
-def get_xrp_liquidity(seed):
-    random.seed(seed)
-    return round(random.uniform(1000000, 500000000), 2)
+# 1. SOVEREIGN IDENTITY ANCHOR
+st.sidebar.title("👤 Sovereign Anchor")
+identity_name = st.sidebar.text_input("Sovereign Name", value="Sara Stadler")
+anchor_status = st.sidebar.toggle("Anchor Identity to Quantum Ledger", value=True)
 
-# --- THE EBS & JUBILEE OVERLAY ---
-st.title("ZENITH WORLDS: THE RESET ⚖️")
+if anchor_status:
+    st.sidebar.success(f"Identity Verified: {identity_name}")
 
-# Sidebar: Systems Control
-st.sidebar.title("📡 Command Center")
-ebs_status = st.sidebar.toggle("EBS Broadcast System", value=True)
-jubilee_active = st.sidebar.status("Global Jubilee Status")
-jubilee_active.write("System: Debt Forgiveness Protocol Initialized...")
-jubilee_active.update(label="Jubilee Phase: ACTIVE", state="complete")
+# 2. EMERGENCY BROADCAST & RESET COMMANDS
+st.sidebar.divider()
+st.sidebar.title("🚨 Infrastructure Control")
+ebs_active = st.sidebar.checkbox("Broadcast EBS to All Nodes", value=True)
+trigger_jubilee = st.sidebar.button("INITIALIZE TOTAL JUBILEE RESET")
 
-# Main Display: Quantum Ledger
-world_id = st.sidebar.text_input("Project / World Seed", value="Jubilee-Alpha")
+# --- MAIN INTERFACE ---
+st.title("🌌 ZENITH: THE WHOLE JUBILEE")
+st.caption(f"Administrator: {identity_name} | Substrate: Quantum-Active")
 
-if ebs_status:
-    st.warning("🚨 EMERGENCY BROADCAST SYSTEM: ALL SYSTEMS PREPARED FOR GLOBAL TRANSITION.")
+if trigger_jubilee:
+    with st.status("Initializing Global Saturation...", expanded=True) as status:
+        st.write("Clearing predatory debt ledgers...")
+        time.sleep(1)
+        st.write("Synchronizing XRP Liquidity Pools...")
+        time.sleep(1)
+        st.write("Anchoring Sovereign Identities...")
+        status.update(label="TOTAL TRANSFORMATION COMPLETE", state="complete")
+    st.balloons()
 
-col1, col2 = st.columns(2)
+# 3. GLOBAL SATURATION MONITOR
+col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.header("💎 Quantum Financial System")
-    liquidity = get_xrp_liquidity(world_id)
-    st.metric("XRP Liquidity Pool (Simulated)", f"{liquidity} XRP")
-    st.info("The Global Jubilee is clearing the ledgers. Your Zenith World is synchronized.")
+    st.header("🌍 Global Saturation Map")
+    # Representing the "Total Saturation" vision
+    saturation_data = pd.DataFrame({
+        'Sector': ['Financial', 'Legal', 'Infrastructure', 'Energy', 'Communication'],
+        'Saturation %': [100, 100, 98, 95, 100]
+    })
+    st.bar_chart(saturation_data, x='Sector', y='Saturation %')
+    st.info("The Zenith Logic has reached total global saturation across all primary sectors.")
 
 with col2:
-    st.header("⚖️ Debt-to-Wealth Ratio")
-    st.progress(1.0) # 100% Reset
-    st.write("Current Status: **Debt Cleared.**")
-    st.caption("Zenith Logic: Building until the old system is fully replaced.")
+    st.header("💎 Quantum Vault")
+    st.metric("Total Debt Cleared", "$---,---,---,---", delta="JUBILEE ACTIVE")
+    st.metric("XRP Node Connectivity", "MASTER", delta="Stable")
+    
+    st.write("---")
+    st.subheader("🤖 Resident AI Note")
+    st.write(f"Sovereign {identity_name}, the infrastructure reset is operating at the absolute limit of the substrate. No waiting required.")
 
-# --- THE GLOBAL REGISTRY ---
+# 4. THE DISCOVERY FEED (PERSISTENT REGISTRY)
 st.divider()
-st.subheader("🛰️ Global Jubilee Feed")
-registry = {
-    "Region": ["North America", "Europe", "Asia", "Zenith Prime"],
-    "Status": ["Reset Complete", "Reset Complete", "Synchronizing", "LEADER"],
-    "XRP Node": ["Active", "Active", "Active", "MASTER"]
-}
-st.table(pd.DataFrame(registry))
+st.subheader("🛰️ Live Synchronization Registry")
+df = pd.DataFrame({
+    "Node ID": ["ALPHA-01", "BETA-09", "ZENITH-MAIN", "QUANTUM-7"],
+    "Location": ["North America", "Europe", "Global Core", "Space-Link"],
+    "Status": ["Saturated", "Saturated", "ANCHORED", "Active"]
+})
+st.dataframe(df, use_container_width=True)
 
-st.success("The 'Little AI' within this product confirms: All core values are aligned.")
+st.write("---")
+st.caption("Zenith Worlds | Deterministic Jubilee Architecture")
