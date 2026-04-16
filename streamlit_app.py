@@ -2,99 +2,53 @@ import streamlit as st
 import random
 import hashlib
 import pandas as pd
-import numpy as np
 
-# --- 1. CORE ARCHITECTURE & THEME ---
-st.set_page_config(page_title="Zenith Worlds", page_icon="🪐", layout="wide")
+# --- ZENITH CORE CONFIG ---
+st.set_page_config(page_title="Zenith: The Jubilee Portal", page_icon="💎", layout="wide")
 
-# Custom CSS to match the Zenith aesthetic
-st.markdown("""
-    <style>
-    .main { background-color: #0e1117; color: #ffffff; }
-    .stMetric { background-color: #161b22; padding: 15px; border-radius: 10px; border: 1px solid #30363d; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# --- 2. THE "LITTLE AI" PROTOCOL ---
-def get_resident_ai(seed):
-    """Every product has its own AI that changes based on the seed."""
+# --- QUANTUM FINANCIAL FUNCTIONS ---
+def get_xrp_liquidity(seed):
     random.seed(seed)
-    names = ["Astra", "Echo", "Nova", "Quark", "Zen"]
-    moods = ["Calculating", "Harmonious", "Vigilant", "Inquisitive"]
-    return {
-        "name": random.choice(names),
-        "mood": random.choice(moods),
-        "message": f"Welcome to this coordinate. I have stabilized the local mathematical constants for you."
-    }
+    return round(random.uniform(1000000, 500000000), 2)
 
-# --- 3. DETERMINISTIC ENGINE (The Math) ---
-def generate_world(seed):
-    # Hash the seed to get a consistent unique number
-    hash_object = hashlib.sha256(seed.encode())
-    hex_dig = hash_object.hexdigest()
-    num_seed = int(hex_dig[:8], 16)
-    random.seed(num_seed)
-    
-    return {
-        "altitude": random.randint(100, 8000),
-        "gravity": round(random.uniform(0.1, 2.5), 2),
-        "bioluminescence": random.choice(["Active", "Dormant", "Pulsing"]),
-        "complexity": random.randint(1, 100),
-        "points": np.random.normal(0, 1, size=100).cumsum() # Terrain Data
-    }
+# --- THE EBS & JUBILEE OVERLAY ---
+st.title("ZENITH WORLDS: THE RESET ⚖️")
 
-# --- 4. THE INTERFACE ---
-st.title("ZENITH WORLDS 🚀")
-st.subheader("The Deterministic World-Sharing Platform")
+# Sidebar: Systems Control
+st.sidebar.title("📡 Command Center")
+ebs_status = st.sidebar.toggle("EBS Broadcast System", value=True)
+jubilee_active = st.sidebar.status("Global Jubilee Status")
+jubilee_active.write("System: Debt Forgiveness Protocol Initialized...")
+jubilee_active.update(label="Jubilee Phase: ACTIVE", state="complete")
 
-# Sidebar - The Entry Point
-st.sidebar.title("📡 Transmission")
-world_id = st.sidebar.text_input("Enter World Seed / URL ID", value="Genesis-Prime")
-st.sidebar.caption("Share this ID with anyone to show them this exact world.")
+# Main Display: Quantum Ledger
+world_id = st.sidebar.text_input("Project / World Seed", value="Jubilee-Alpha")
 
-# Process World Data
-world = generate_world(world_id)
-ai = get_resident_ai(world_id)
+if ebs_status:
+    st.warning("🚨 EMERGENCY BROADCAST SYSTEM: ALL SYSTEMS PREPARED FOR GLOBAL TRANSITION.")
 
-# Main Display
-col1, col2 = st.columns([2, 1])
+col1, col2 = st.columns(2)
 
 with col1:
-    st.header(f"📍 World: {world_id}")
-    
-    # Metrics
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Altitude", f"{world['altitude']}m")
-    m2.metric("Gravity", f"{world['gravity']}G")
-    m3.metric("Bioluminescence", world['bioluminescence'])
-    
-    # Mathematical Terrain Visualization
-    st.write("### 📉 Terrain Frequency Analysis")
-    st.line_chart(world['points'])
-    
-    if st.button("❤️ Like & Archive to Global Registry"):
-        st.balloons()
-        st.success(f"World {world_id} saved to the Zenith Registry!")
+    st.header("💎 Quantum Financial System")
+    liquidity = get_xrp_liquidity(world_id)
+    st.metric("XRP Liquidity Pool (Simulated)", f"{liquidity} XRP")
+    st.info("The Global Jubilee is clearing the ledgers. Your Zenith World is synchronized.")
 
 with col2:
-    # The Resident AI UI
-    st.markdown(f"### 🤖 AI Resident: {ai['name']}")
-    st.info(f"**Current State:** {ai['mood']}\n\n*{ai['message']}*")
-    
-    st.write("---")
-    st.write("**World Integrity**")
-    st.progress(world['complexity'] / 100)
-    st.caption("Mathematical stability of this generation.")
+    st.header("⚖️ Debt-to-Wealth Ratio")
+    st.progress(1.0) # 100% Reset
+    st.write("Current Status: **Debt Cleared.**")
+    st.caption("Zenith Logic: Building until the old system is fully replaced.")
 
-# --- 5. SOCIAL DISCOVERY FEED (The Registry) ---
+# --- THE GLOBAL REGISTRY ---
 st.divider()
-st.subheader("🛰️ Global Discovery Feed (Live Registry)")
-# Mock registry data representing the network effect
-registry_data = {
-    "World ID": ["Void-Runner", "Oceania-7", "Sara-1", world_id],
-    "Likes": [1024, 856, 2100, 1],
-    "Stability": ["99%", "94%", "100%", f"{world['complexity']}%"]
+st.subheader("🛰️ Global Jubilee Feed")
+registry = {
+    "Region": ["North America", "Europe", "Asia", "Zenith Prime"],
+    "Status": ["Reset Complete", "Reset Complete", "Synchronizing", "LEADER"],
+    "XRP Node": ["Active", "Active", "Active", "MASTER"]
 }
-st.table(pd.DataFrame(registry_data))
+st.table(pd.DataFrame(registry))
 
-st.caption("Zenith Worlds v1.0 | Deterministic Architecture | No Bloat")
+st.success("The 'Little AI' within this product confirms: All core values are aligned.")
