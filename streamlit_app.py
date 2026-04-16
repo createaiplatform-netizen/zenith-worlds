@@ -6,124 +6,118 @@ from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 # =========================
-# CONFIG
+# DATA LOADER
 # =========================
-st.set_page_config(page_title="Zenith v1 - Market Regime Monitor", layout="wide")
-
-WEBHOOK_URL = st.secrets.get("WEBHOOK_URL", "") if hasattr(st, "secrets") else ""
-
-# =========================
-# DATA
-# =========================
-def fetch_data(days=90):
+def load_data():
     url = "https://api.coingecko.com/api/v3/coins/ripple/market_chart"
-    params = {"vs_currency": "usd", "days": days}
-
+    params = {"vs_currency": "usd", "days": 60}
     r = requests.get(url, params=params, timeout=10).json()
 
     df = pd.DataFrame(r["prices"], columns=["ts", "price"])
     df["time"] = pd.to_datetime(df["ts"], unit="ms")
     return df
 
-# =========================
-# FEATURE ENGINE
-# =========================
-def build_features(df):
-    df = df.copy()
-
-    df["log_return"] = np.log(df["price"]).diff()
-    df["volatility"] = df["log_return"].rolling(20).std()
-    df["momentum"] = df["price"].diff(5)
-
-    # calibration feature (prevents overreaction)
-    df["volatility_regime"] = df["volatility"].rolling(50).mean()
-
-    df = df.dropna()
-    return df
 
 # =========================
-# MODEL (REGIME DETECTOR)
+# CORE ENGINE
 # =========================
-class ZenithModel:
+class ZenithEngine:
     def __init__(self):
+        self.model = IsolationForest(n_estimators=200, contamination=0.04, random_state=42)
         self.scaler = StandardScaler()
-        self.model = IsolationForest(
-            n_estimators=200,
-            contamination=0.05,
-            random_state=42
+
+    def features(self, df):
+        df = df.copy()
+        df["log_return"] = np.log(df["price"]).diff()
+        df["volatility"] = df["log_return"].rolling(20).std()
+        df["momentum"] = df["price"].diff(5)
+        df["trend"] = df["price"].rolling(30).mean()
+        df["trend_dev"] = df["price"] / (df["trend"] + 1e-9)
+        return df.dropna()
+
+    def analyze(self, df):
+        df = self.features(df)
+
+        X = self.scaler.fit_transform(
+            df[["log_return", "volatility", "momentum", "trend_dev"]]
         )
 
-    def run(self, df):
-        df = build_features(df)
-
-        features = df[["log_return", "volatility", "momentum"]]
-
-        X = self.scaler.fit_transform(features)
         self.model.fit(X)
 
         df["anomaly"] = self.model.predict(X)
         df["score"] = -self.model.decision_function(X)
 
-        latest = df.iloc[-1]
+        last = df.iloc[-1]
 
-        # =========================
-        # REGIME LOGIC (CALIBRATED)
-        # =========================
-        vol_ratio = latest["volatility"] / (latest["volatility_regime"] + 1e-9)
-
-        if latest["anomaly"] == -1:
-            if latest["momentum"] > 0 and vol_ratio > 1.1:
-                state = "🚀 EXPANSION"
-            elif latest["momentum"] < 0:
-                state = "⚠️ DISTRIBUTION"
+        if last["anomaly"] == -1:
+            if last["momentum"] > 0:
+                state = "EXPANSION"
+            elif last["momentum"] < 0:
+                state = "DISTRIBUTION"
             else:
-                state = "⚖️ STRUCTURAL SHIFT"
+                state = "STRUCTURAL_SHIFT"
         else:
-            state = "🟢 EQUILIBRIUM"
+            state = "EQUILIBRIUM"
 
-        risk_score = float(latest["score"]) * float(vol_ratio)
+        return df, state, float(last["score"]), float(last["volatility"])
 
-        return df, state, risk_score
-
-# =========================
-# ALERT SYSTEM (OPTIONAL)
-# =========================
-def send_alert(state, price, score):
-    if not WEBHOOK_URL:
-        return
-
-    try:
-        requests.post(WEBHOOK_URL, json={
-            "content": f"""
-📡 Zenith Alert
-
-State: {state}
-Price: ${price:.4f}
-Risk Score: {score:.3f}
-"""
-        }, timeout=5)
-    except:
-        pass
 
 # =========================
-# APP
+# RISK ENGINE
 # =========================
-st.title("🧭 Zenith v1 — Market Regime Monitor")
+def risk_score(score, vol):
+    risk = abs(score) * (1 + vol * 10)
 
-model = ZenithModel()
+    if risk < 0.5:
+        return "LOW"
+    elif risk < 1.2:
+        return "MEDIUM"
+    else:
+        return "HIGH"
 
-df = fetch_data(90)
-data, state, risk = model.run(df)
 
-latest_price = df["price"].iloc[-1]
+# =========================
+# ORACLE (INTERPRETER)
+# =========================
+def oracle(state, risk):
+    if state == "EXPANSION" and risk == "LOW":
+        return "TREND CONTINUATION"
+    if state == "EXPANSION" and risk == "HIGH":
+        return "BREAKOUT BUT OVEREXTENDED"
+    if state == "DISTRIBUTION":
+        return "REVERSAL RISK"
+    if state == "STRUCTURAL_SHIFT":
+        return "REGIME CHANGE"
+    return "NO EDGE"
 
+
+# =========================
+# STREAMLIT APP
+# =========================
+st.set_page_config(page_title="ZENITH v1.2", layout="wide")
+st.title("📡 ZENITH — Market Intelligence System")
+
+df = load_data()
+engine = ZenithEngine()
+
+data, state, score, vol = engine.analyze(df)
+
+risk = risk_score(score, vol)
+signal = oracle(state, risk)
+
+# =========================
+# DASHBOARD
+# =========================
 col1, col2, col3 = st.columns(3)
 
-col1.metric("Price", f"${latest_price:.4f}")
-col2.metric("Regime", state)
-col3.metric("Risk Score", f"{risk:.3f}")
+col1.metric("STATE", state)
+col2.metric("RISK", risk)
+col3.metric("SIGNAL", signal)
+
+st.metric("ANOMALY SCORE", round(score, 4))
+st.metric("VOLATILITY", round(vol, 4))
 
 st.line_chart(data.set_index("time")[["price", "score"]])
 
-st.subheader("System View")
-st.write(data.tail(10))
+st.subheader("Latest Data")
+st.dataframe(data.tail(15))
