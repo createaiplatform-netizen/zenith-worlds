@@ -1,27 +1,24 @@
-# brain.py
-import alpaca_trade_api as tradeapi
-import numpy as np
+# execution.py
 
-class Brain:
+class Executor:
 
     def __init__(self, api):
         self.api = api
 
-    def get_prices(self, symbol):
-        bars = self.api.get_bars(symbol, "1Min", limit=50)
-        return [b.c for b in bars]
+    def buy(self, symbol, qty):
+        return self.api.submit_order(
+            symbol=symbol,
+            qty=qty,
+            side="buy",
+            type="market",
+            time_in_force="day"
+        )
 
-    def decide(self, prices):
-        prices = np.array(prices)
-
-        if len(prices) < 10:
-            return "HOLD"
-
-        short = prices[-5:].mean()
-        long = prices[-20:].mean()
-
-        if short > long:
-            return "BUY"
-        elif short < long:
-            return "SELL"
-        return "HOLD"
+    def sell(self, symbol, qty):
+        return self.api.submit_order(
+            symbol=symbol,
+            qty=qty,
+            side="sell",
+            type="market",
+            time_in_force="day"
+        )
