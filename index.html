@@ -1,34 +1,28 @@
 <!doctype html>
 <html>
 <head>
-  <title>Zenith Live Engine</title>
+  <meta charset="utf-8" />
+  <title>Zenith</title>
   <style>
-    body { background:#0b0f14; color:#00ff88; font-family: monospace; padding:20px; }
-    .box { border:1px solid #00ff88; padding:10px; height:80vh; overflow:auto; }
+    body { background:#000; color:#0f0; font-family: monospace; padding:20px; }
   </style>
 </head>
 <body>
 
-<h2>ZENITH LIVE ENGINE (BROWSER MODE)</h2>
-<div class="box" id="log"></div>
+<h1>ZENITH RUNNING</h1>
+<div id="out"></div>
 
 <script>
-let log = document.getElementById("log");
+setInterval(() => {
+  const price = (Math.random() * 1.2 + 0.4).toFixed(4);
 
-function tick() {
-    let price = (Math.random() * 1.2 + 0.4).toFixed(4);
+  let signal = "HOLD";
+  if (price > 1.2) signal = "BUY";
+  if (price < 0.8) signal = "SELL";
 
-    let signal = "HOLD";
-    if (price > 1.2) signal = "BUY";
-    if (price < 0.8) signal = "SELL";
-
-    let line = `PRICE: ${price} | SIGNAL: ${signal}`;
-
-    log.innerHTML += line + "<br>";
-    log.scrollTop = log.scrollHeight;
-}
-
-setInterval(tick, 500);
+  document.getElementById("out").innerHTML =
+    "PRICE: " + price + "<br>SIGNAL: " + signal;
+}, 500);
 </script>
 
 </body>
