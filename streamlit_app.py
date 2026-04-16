@@ -1,12 +1,14 @@
 import streamlit as st
 import alpaca_trade_api as tradeapi
+import numpy as np
+import pandas as pd
 
-st.set_page_config(page_title="AI Trading System", layout="wide")
+st.set_page_config(page_title="AI Brain Trading System", layout="wide")
 
-st.title("📊 AI Trading System Dashboard")
+st.title("🧠 AI Brain Trading System")
 
 # =========================
-# KEYS
+# INPUT CREDENTIALS
 # =========================
 
 api_key = st.text_input("API Key ID", type="password")
@@ -17,13 +19,51 @@ base_url = st.selectbox(
     ["https://paper-api.alpaca.markets", "https://api.alpaca.markets"]
 )
 
-api = None
+# =========================
+# AI STRATEGY ENGINE
+# =========================
+
+def ai_decision(prices):
+    """
+    Simple AI-like momentum + mean reversion hybrid brain.
+    Returns BUY / SELL / HOLD
+    """
+
+    if len(prices) < 5:
+        return "HOLD"
+
+    recent = np.array(prices[-5:])
+    mean = np.mean(recent)
+    last = recent[-1]
+
+    momentum = last - recent[0]
+
+    if momentum > 0 and last > mean:
+        return "BUY"
+    elif momentum < 0 and last < mean:
+        return "SELL"
+    else:
+        return "HOLD"
+
+
+# =========================
+# RISK ENGINE
+# =========================
+
+def position_size(cash, price):
+    risk_per_trade = 0.05  # 5% risk model
+    size_value = cash * risk_per_trade
+    qty = max(int(size_value / price), 1)
+    return qty
+
 
 # =========================
 # CONNECT
 # =========================
 
-if st.button("Initialize System"):
+api = None
+
+if st.button("Activate AI Brain"):
 
     if api_key and api_secret:
 
@@ -37,75 +77,79 @@ if st.button("Initialize System"):
 
             account = api.get_account()
 
-            st.success("System Online")
+            st.success("AI Brain Online")
+
+            cash = float(account.cash)
 
             col1, col2, col3 = st.columns(3)
 
-            with col1:
-                st.metric("Status", account.status)
-
-            with col2:
-                st.metric("Buying Power", account.buying_power)
-
-            with col3:
-                st.metric("Cash", account.cash)
+            col1.metric("Status", account.status)
+            col2.metric("Buying Power", account.buying_power)
+            col3.metric("Cash", account.cash)
 
             # =========================
-            # POSITIONS
+            # MARKET DATA SIMULATION
             # =========================
 
-            st.subheader("📦 Open Positions")
+            st.subheader("📈 AI Market Signal Engine")
+
+            symbol = st.text_input("Symbol", "AAPL")
+
+            bars = api.get_bars(symbol, "1Min", limit=20)
+            prices = [b.c for b in bars]
+
+            decision = ai_decision(prices)
+
+            st.write("AI Decision:", decision)
+
+            # =========================
+            # EXECUTION ENGINE
+            # =========================
+
+            current_price = prices[-1]
+            qty = position_size(cash, current_price)
+
+            st.write("Suggested Position Size:", qty)
+
+            if decision == "BUY":
+                if st.button("EXECUTE BUY"):
+                    api.submit_order(
+                        symbol=symbol,
+                        qty=qty,
+                        side="buy",
+                        type="market",
+                        time_in_force="day"
+                    )
+                    st.success("BUY EXECUTED")
+
+            elif decision == "SELL":
+                if st.button("EXECUTE SELL"):
+                    api.submit_order(
+                        symbol=symbol,
+                        qty=qty,
+                        side="sell",
+                        type="market",
+                        time_in_force="day"
+                    )
+                    st.success("SELL EXECUTED")
+
+            else:
+                st.info("NO ACTION (HOLD)")
+
+            # =========================
+            # POSITIONS VIEW
+            # =========================
+
+            st.subheader("📦 Portfolio")
 
             positions = api.list_positions()
 
-            if positions:
-                for p in positions:
-                    st.write(f"{p.symbol} | Qty: {p.qty} | P/L: {p.unrealized_pl}")
-            else:
-                st.write("No open positions")
+            for p in positions:
+                st.write(f"{p.symbol} | Qty: {p.qty} | P/L: {p.unrealized_pl}")
 
         except Exception as e:
-            st.error("System failed to initialize")
+            st.error("AI Brain Failed")
             st.write(e)
 
     else:
-        st.warning("Missing credentials")
-
-# =========================
-# TRADING PANEL
-# =========================
-
-st.subheader("💱 Trade Panel")
-
-symbol = st.text_input("Symbol (e.g. AAPL)")
-qty = st.number_input("Quantity", min_value=1, step=1)
-
-col1, col2 = st.columns(2)
-
-with col1:
-    if st.button("BUY"):
-        try:
-            api.submit_order(
-                symbol=symbol,
-                qty=qty,
-                side="buy",
-                type="market",
-                time_in_force="day"
-            )
-            st.success(f"BUY order sent: {symbol}")
-        except Exception as e:
-            st.error(e)
-
-with col2:
-    if st.button("SELL"):
-        try:
-            api.submit_order(
-                symbol=symbol,
-                qty=qty,
-                side="sell",
-                type="market",
-                time_in_force="day"
-            )
-            st.success(f"SELL order sent: {symbol}")
-        except Exception as e:
-            st.error(e)
+        st.warning("Enter API credentials")
