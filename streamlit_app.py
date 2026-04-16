@@ -5,22 +5,33 @@ import requests
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+# -----------------------------
+# CORE ENGINE
+# -----------------------------
 class ZenithEngine:
     def __init__(self):
-        self.model = IsolationForest(n_estimators=200, contamination=0.05, random_state=42)
+        self.model = IsolationForest(
+            n_estimators=200,
+            contamination=0.05,
+            random_state=42
+        )
         self.scaler = StandardScaler()
 
-    def build(self, df):
+    def build_features(self, df):
         df = df.copy()
+
         df["log_return"] = np.log(df["Price"]).diff()
         df["volatility"] = df["log_return"].rolling(20).std()
         df["momentum"] = df["Price"].diff(5)
+
         return df.dropna()
 
     def analyze(self, df):
-        df = self.build(df)
+        df = self.build_features(df)
 
-        X = self.scaler.fit_transform(df[["log_return", "volatility", "momentum"]])
+        X = self.scaler.fit_transform(
+            df[["log_return", "volatility", "momentum"]]
+        )
 
         self.model.fit(X)
 
@@ -37,28 +48,38 @@ class ZenithEngine:
         return df, state, float(last["score"])
 
 
+# -----------------------------
+# DATA
+# -----------------------------
 @st.cache_data
-def load():
+def load_data():
     url = "https://api.coingecko.com/api/v3/coins/ripple/market_chart"
     params = {"vs_currency": "usd", "days": 30}
+
     r = requests.get(url, params=params).json()
 
     df = pd.DataFrame(r["prices"], columns=["ts", "Price"])
     df["Date"] = pd.to_datetime(df["ts"], unit="ms")
+
     return df
 
 
-st.title("Zenith — Market Sensor")
+# -----------------------------
+# APP UI
+# -----------------------------
+st.set_page_config(page_title="Zenith", layout="wide")
+
+st.title("📡 Zenith — Market Anomaly Sensor")
 
 engine = ZenithEngine()
 
-df = load()
+df = load_data()
 data, state, score = engine.analyze(df)
 
 c1, c2, c3 = st.columns(3)
 
 c1.metric("State", state)
-c2.metric("Score", f"{score:.4f}")
+c2.metric("Anomaly Score", f"{score:.4f}")
 c3.metric("Price", f"${df['Price'].iloc[-1]:.4f}")
 
 st.line_chart(data.set_index("Date")[["Price", "score"]])
