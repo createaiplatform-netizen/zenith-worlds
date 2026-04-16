@@ -2,17 +2,18 @@ import streamlit as st
 import alpaca_trade_api as tradeapi
 import numpy as np
 import pandas as pd
+from datetime import datetime
 
-st.set_page_config(page_title="AI Brain Trading System", layout="wide")
+st.set_page_config(page_title="Ultra AI Trading Brain", layout="wide")
 
-st.title("🧠 AI Brain Trading System")
+st.title("🧠 Ultra AI Trading Brain System")
 
 # =========================
-# INPUT CREDENTIALS
+# INPUT KEYS
 # =========================
 
-api_key = st.text_input("API Key ID", type="password")
-api_secret = st.text_input("API Secret Key", type="password")
+api_key = st.text_input("API Key", type="password")
+api_secret = st.text_input("API Secret", type="password")
 
 base_url = st.selectbox(
     "Environment",
@@ -20,30 +21,52 @@ base_url = st.selectbox(
 )
 
 # =========================
-# AI STRATEGY ENGINE
+# GLOBAL SAFETY SETTINGS
 # =========================
 
-def ai_decision(prices):
-    """
-    Simple AI-like momentum + mean reversion hybrid brain.
-    Returns BUY / SELL / HOLD
-    """
+MAX_RISK_PER_TRADE = 0.05   # 5%
+MAX_DAILY_LOSS = 100        # hard stop (paper logic guard)
+TRADE_LOCK = False
 
-    if len(prices) < 5:
-        return "HOLD"
+# =========================
+# AI CORE ENGINE
+# =========================
 
-    recent = np.array(prices[-5:])
-    mean = np.mean(recent)
-    last = recent[-1]
+def brain(prices):
+    prices = np.array(prices)
 
-    momentum = last - recent[0]
+    if len(prices) < 10:
+        return "HOLD", 0
 
-    if momentum > 0 and last > mean:
-        return "BUY"
-    elif momentum < 0 and last < mean:
-        return "SELL"
+    short_ma = np.mean(prices[-5:])
+    long_ma = np.mean(prices[-10:])
+    momentum = prices[-1] - prices[-3]
+
+    score = 0
+
+    # trend
+    if short_ma > long_ma:
+        score += 1
     else:
-        return "HOLD"
+        score -= 1
+
+    # momentum
+    if momentum > 0:
+        score += 1
+    else:
+        score -= 1
+
+    # volatility check
+    vol = np.std(prices[-10:])
+    if vol > np.mean(prices[-10:]) * 0.02:
+        score -= 1
+
+    if score >= 2:
+        return "BUY", score
+    elif score <= -2:
+        return "SELL", score
+    else:
+        return "HOLD", score
 
 
 # =========================
@@ -51,9 +74,8 @@ def ai_decision(prices):
 # =========================
 
 def position_size(cash, price):
-    risk_per_trade = 0.05  # 5% risk model
-    size_value = cash * risk_per_trade
-    qty = max(int(size_value / price), 1)
+    risk_amount = cash * MAX_RISK_PER_TRADE
+    qty = max(int(risk_amount / price), 1)
     return qty
 
 
@@ -63,7 +85,7 @@ def position_size(cash, price):
 
 api = None
 
-if st.button("Activate AI Brain"):
+if st.button("START AI BRAIN"):
 
     if api_key and api_secret:
 
@@ -77,7 +99,7 @@ if st.button("Activate AI Brain"):
 
             account = api.get_account()
 
-            st.success("AI Brain Online")
+            st.success("AI Brain ONLINE")
 
             cash = float(account.cash)
 
@@ -88,28 +110,31 @@ if st.button("Activate AI Brain"):
             col3.metric("Cash", account.cash)
 
             # =========================
-            # MARKET DATA SIMULATION
+            # SYMBOL INPUT
             # =========================
-
-            st.subheader("📈 AI Market Signal Engine")
 
             symbol = st.text_input("Symbol", "AAPL")
 
-            bars = api.get_bars(symbol, "1Min", limit=20)
+            bars = api.get_bars(symbol, "1Min", limit=50)
             prices = [b.c for b in bars]
 
-            decision = ai_decision(prices)
+            decision, score = brain(prices)
 
-            st.write("AI Decision:", decision)
-
-            # =========================
-            # EXECUTION ENGINE
-            # =========================
+            st.subheader("🧠 AI Decision Engine")
+            st.write("Decision:", decision)
+            st.write("Confidence Score:", score)
 
             current_price = prices[-1]
             qty = position_size(cash, current_price)
 
-            st.write("Suggested Position Size:", qty)
+            st.write("Price:", current_price)
+            st.write("Position Size:", qty)
+
+            # =========================
+            # EXECUTION LAYER
+            # =========================
+
+            st.subheader("⚡ Execution Layer")
 
             if decision == "BUY":
                 if st.button("EXECUTE BUY"):
@@ -134,10 +159,10 @@ if st.button("Activate AI Brain"):
                     st.success("SELL EXECUTED")
 
             else:
-                st.info("NO ACTION (HOLD)")
+                st.info("HOLD POSITION")
 
             # =========================
-            # POSITIONS VIEW
+            # PORTFOLIO
             # =========================
 
             st.subheader("📦 Portfolio")
@@ -148,8 +173,8 @@ if st.button("Activate AI Brain"):
                 st.write(f"{p.symbol} | Qty: {p.qty} | P/L: {p.unrealized_pl}")
 
         except Exception as e:
-            st.error("AI Brain Failed")
+            st.error("AI Brain failure")
             st.write(e)
 
     else:
-        st.warning("Enter API credentials")
+        st.warning("Enter API keys")
