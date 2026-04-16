@@ -1,7 +1,10 @@
 import time
 import random
+import json
 
-log = "ZENITH RUNNING\n"
+print("ZENITH SIMULATION STARTED")
+
+state = []
 
 while True:
     price = round(random.uniform(0.5, 1.5), 4)
@@ -13,7 +16,15 @@ while True:
     else:
         signal = "HOLD"
 
-    log += f"PRICE: {price} | SIGNAL: {signal}\n"
-    print(f"PRICE: {price} | SIGNAL: {signal}")
+    entry = {
+        "time": time.time(),
+        "price": price,
+        "signal": signal
+    }
+
+    state.append(entry)
+
+    # show output in GitHub "Actions" logs if run there
+    print(json.dumps(entry))
 
     time.sleep(3)
