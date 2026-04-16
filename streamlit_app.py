@@ -4,6 +4,13 @@ import pandas as pd
 import requests
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
+import datetime
+
+# =========================
+# CONFIG (SAFE BY DEFAULT)
+# =========================
+MAX_TRADES_PER_DAY = 3
+TRADE_ENABLED = False  # <- TURN TO True ONLY WHEN READY
 
 # =========================
 # DATA
@@ -19,38 +26,37 @@ def load_data():
     return df
 
 # =========================
-# LIQUIDITY CHECK (NO EXTRA FILES)
+# LIQUIDITY MODULE
 # =========================
-def liquidity_state(df):
+def liquidity(df):
     df = df.copy()
     df["ret"] = df["price"].pct_change()
     vol = df["ret"].rolling(10).std().iloc[-1]
 
     if vol > 0.03:
-        return "🔴 LIQUIDITY CONTRACTING", vol
+        return "🔴 CONTRACTING", vol
     elif vol < 0.01:
-        return "🟢 LIQUIDITY EXPANDING", vol
-    else:
-        return "🟡 NEUTRAL", vol
+        return "🟢 EXPANDING", vol
+    return "🟡 NEUTRAL", vol
 
 # =========================
 # ZENITH ENGINE
 # =========================
 class Zenith:
     def __init__(self):
-        self.model = IsolationForest(contamination=0.03, n_estimators=200)
+        self.model = IsolationForest(contamination=0.03)
         self.scaler = StandardScaler()
 
     def run(self, df):
         df = df.copy()
 
-        df["log_ret"] = np.log(df["price"]).diff()
-        df["vol"] = df["log_ret"].rolling(20).std()
+        df["ret"] = np.log(df["price"]).diff()
+        df["vol"] = df["ret"].rolling(20).std()
         df["mom"] = df["price"].diff(5)
 
         df = df.dropna()
 
-        X = self.scaler.fit_transform(df[["log_ret", "vol", "mom"]])
+        X = self.scaler.fit_transform(df[["ret", "vol", "mom"]])
         self.model.fit(X)
 
         df["anomaly"] = self.model.predict(X)
@@ -59,34 +65,63 @@ class Zenith:
         last = df.iloc[-1]
 
         if last["anomaly"] == -1:
-            state = "🚀 EXPANSION" if last["mom"] > 0 else "⚠️ DISTRIBUTION"
+            state = "EXPANSION" if last["mom"] > 0 else "DISTRIBUTION"
         else:
-            state = "⚖️ EQUILIBRIUM"
+            state = "EQUILIBRIUM"
 
         return df, state, float(last["score"])
 
 # =========================
+# RISK ENGINE
+# =========================
+def risk_manager(state, liq):
+    if liq == "🔴 CONTRACTING":
+        return 0.0, "BLOCKED (LIQUIDITY)"
+
+    if state == "EXPANSION":
+        return 0.5, "BUY SIGNAL"
+    elif state == "DISTRIBUTION":
+        return -0.5, "SELL SIGNAL"
+
+    return 0.0, "NO TRADE"
+
+# =========================
+# PAPER EXECUTION (SAFE MOCK)
+# =========================
+trade_log = []
+
+def execute(signal_size, signal):
+    if not TRADE_ENABLED:
+        return "PAPER MODE: NO REAL TRADE EXECUTED"
+
+    if signal_size == 0:
+        return "NO TRADE"
+
+    return f"EXECUTED {signal} SIZE {signal_size}"
+
+# =========================
 # APP
 # =========================
-st.title("ZENITH — LIVE SYSTEM (SIMPLE VERSION)")
+st.title("🏛️ ZENITH AUTO TRADER (SAFE MODE)")
 
 df = load_data()
 
-liq_state, vol = liquidity_state(df)
+liq_state, vol = liquidity(df)
 
 engine = Zenith()
 data, state, score = engine.run(df)
 
-# SIMPLE RULE LINK
-if "LIQUIDITY CONTRACTING" in liq_state:
-    state = "⚠️ DISTRIBUTION (LIQUIDITY RISK)"
+size, signal = risk_manager(state, liq_state)
+
+result = execute(size, signal)
 
 # =========================
 # DISPLAY
 # =========================
-st.metric("ZENITH STATE", state)
+st.metric("STATE", state)
 st.metric("LIQUIDITY", liq_state)
+st.metric("RISK SIGNAL", signal)
 st.metric("ANOMALY SCORE", round(score, 4))
-st.metric("VOLATILITY", round(vol, 5))
+st.metric("TRADE RESULT", result)
 
 st.line_chart(data.set_index("time")[["price", "score"]])
