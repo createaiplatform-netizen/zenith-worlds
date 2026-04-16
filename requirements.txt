@@ -1,6 +1,3 @@
-fastapi
-uvicorn
+streamlit
 alpaca-trade-api
 numpy
-requests
-streamlit
