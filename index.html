@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Zenith OS</title>
+  <title>Zenith OS v2</title>
   <style>
     body{
       margin:0;
@@ -16,33 +16,37 @@
     }
 
     .box{
-      width:420px;
+      width:450px;
       border:1px solid #00ff88;
       padding:20px;
       border-radius:10px;
-      text-align:center;
     }
 
     .title{
+      text-align:center;
       font-size:18px;
-      margin-bottom:15px;
+      margin-bottom:10px;
     }
 
     .big{
       font-size:22px;
-      margin:15px 0;
+      text-align:center;
+      margin:10px 0;
     }
 
-    .row{
-      display:flex;
-      justify-content:space-between;
-      margin:8px 0;
+    .history{
+      height:120px;
+      overflow:auto;
+      border:1px solid #00ff88;
+      padding:10px;
+      margin-top:10px;
+      font-size:12px;
     }
 
     button{
-      margin-top:10px;
       width:100%;
       padding:10px;
+      margin-top:10px;
       border:none;
       background:#00ff88;
       color:#000;
@@ -55,27 +59,26 @@
 <body>
 
 <div class="box">
-  <div class="title">ZENITH OS</div>
+  <div class="title">ZENITH OS v2</div>
 
   <div class="big" id="price">PRICE: --</div>
   <div class="big" id="signal">SIGNAL: --</div>
 
-  <div class="row"><span>Mode</span><span id="mode">AUTO</span></div>
-
   <button onclick="toggleMode()">TOGGLE MODE</button>
+
+  <div class="history" id="history"></div>
 </div>
 
 <script>
 let mode = "AUTO";
+let history = [];
 
 function toggleMode(){
   mode = mode === "AUTO" ? "MANUAL" : "AUTO";
-  document.getElementById("mode").innerText = mode;
 }
 
 function tick(){
   const price = (Math.random()*1.2+0.4);
-
   let signal = "HOLD";
 
   if(mode === "AUTO"){
@@ -85,8 +88,14 @@ function tick(){
     signal = "MANUAL";
   }
 
+  const entry = `P:${price.toFixed(4)} | S:${signal}`;
+  history.push(entry);
+
+  if(history.length > 20) history.shift();
+
   document.getElementById("price").innerText = "PRICE: " + price.toFixed(4);
   document.getElementById("signal").innerText = "SIGNAL: " + signal;
+  document.getElementById("history").innerHTML = history.join("<br>");
 }
 
 setInterval(tick, 700);
