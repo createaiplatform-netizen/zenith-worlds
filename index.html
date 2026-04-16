@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Zenith Live</title>
+  <title>Zenith Live App</title>
   <style>
     body {
       margin:0;
@@ -26,13 +26,13 @@
 <body>
 
 <div class="box">
-  <div>ZENITH LIVE</div>
+  <div>ZENITH LIVE APP</div>
   <div id="price" class="big"></div>
   <div id="signal" class="big"></div>
 </div>
 
 <script>
-setInterval(() => {
+function tick(){
   const price = (Math.random()*1.2+0.4).toFixed(4);
 
   let signal = "HOLD";
@@ -41,7 +41,10 @@ setInterval(() => {
 
   document.getElementById("price").innerText = "PRICE: " + price;
   document.getElementById("signal").innerText = "SIGNAL: " + signal;
-}, 800);
+}
+
+setInterval(tick, 800);
+tick();
 </script>
 
 </body>
