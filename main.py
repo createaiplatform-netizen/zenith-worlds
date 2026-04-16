@@ -1,21 +1,22 @@
-import os
-import time
+from flask import Flask, jsonify
 import requests
-from datetime import datetime
+import time
+
+app = Flask(__name__)
+
+state = {
+    "last_price": None,
+    "price": 0,
+    "signal": "HOLD"
+}
 
 SYMBOL = "XRP-USD"
-INTERVAL = 30
-
-MAX_TRADE_USD = 50
-LIVE_TRADING = False  # KEEP FALSE UNTIL READY
-
-state = {"last_price": None}
 
 def get_price():
     r = requests.get("https://api.coinbase.com/v2/prices/XRP-USD/spot")
     return float(r.json()["data"]["amount"])
 
-def signal(price):
+def compute_signal(price):
     if state["last_price"] is None:
         return "HOLD"
 
@@ -23,24 +24,35 @@ def signal(price):
 
     if change > 0.01:
         return "BUY"
-    if change < -0.01:
+    elif change < -0.01:
         return "SELL"
     return "HOLD"
 
-def log(msg):
-    print(f"[{datetime.utcnow().isoformat()}] {msg}", flush=True)
 
-while True:
-    try:
-        price = get_price()
-        sig = signal(price)
+@app.route("/data")
+def data():
+    return jsonify(state)
 
-        state["last_price"] = price
 
-        log(f"{SYMBOL} PRICE={price} SIGNAL={sig}")
+def update_loop():
+    while True:
+        try:
+            price = get_price()
+            signal = compute_signal(price)
 
-        time.sleep(INTERVAL)
+            state["last_price"] = price
+            state["price"] = price
+            state["signal"] = signal
 
-    except Exception as e:
-        log(f"ERROR: {e}")
-        time.sleep(5)
+            time.sleep(5)
+
+        except Exception as e:
+            print("error:", e)
+            time.sleep(5)
+
+
+if __name__ == "__main__":
+    from threading import Thread
+
+    Thread(target=update_loop, daemon=True).start()
+    app.run(host="0.0.0.0", port=10000)
