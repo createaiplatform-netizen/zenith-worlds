@@ -1,52 +1,60 @@
 from fastapi import FastAPI
 import alpaca_trade_api as tradeapi
-
-from brain import Brain
-from execution import Executor
-from risk import Risk
-from memory import Memory
+import numpy as np
+import os
 
 app = FastAPI()
 
+API_KEY = os.getenv("ALPACA_API_KEY")
+API_SECRET = os.getenv("ALPACA_API_SECRET")
+BASE_URL = "https://paper-api.alpaca.markets"
+
 api = tradeapi.REST(
-    "API_KEY",
-    "API_SECRET",
-    "https://paper-api.alpaca.markets",
+    API_KEY,
+    API_SECRET,
+    BASE_URL,
     api_version="v2"
 )
 
-brain = Brain(api)
-executor = Executor(api)
-risk = Risk()
-memory = Memory()
+def brain(prices):
+    prices = np.array(prices)
 
-@app.get("/status")
-def status():
-    return {"status": "online"}
+    short = np.mean(prices[-5:])
+    long = np.mean(prices[-20:])
+    momentum = prices[-3] - prices[-10]
 
-@app.post("/cycle")
+    score = 0
+    score += 1 if short > long else -1
+    score += 1 if momentum > 0 else -1
+
+    if score >= 2:
+        return "BUY"
+    elif score <= -2:
+        return "SELL"
+    return "HOLD"
+
+@app.get("/cycle")
 def cycle(symbol: str = "AAPL"):
 
     account = api.get_account()
     cash = float(account.cash)
 
-    prices = brain.get_prices(symbol)
-    decision = brain.decide(prices)
+    bars = api.get_bars(symbol, "1Min", limit=30)
+    prices = [b.c for b in bars]
+
+    decision = brain(prices)
 
     price = prices[-1]
-    qty = risk.size(cash, price)
+    qty = max(int((cash * 0.05) / price), 1)
 
     if decision == "BUY":
-        executor.buy(symbol, qty)
-        memory.log(symbol, "BUY", qty)
+        api.submit_order(symbol, qty, "buy", "market", "day")
 
     elif decision == "SELL":
-        executor.sell(symbol, qty)
-        memory.log(symbol, "SELL", qty)
+        api.submit_order(symbol, qty, "sell", "market", "day")
 
-    return {
-        "symbol": symbol,
-        "decision": decision,
-        "qty": qty,
-        "price": price
-    }
+    return {"symbol": symbol, "decision": decision, "qty": qty}
+
+@app.get("/status")
+def status():
+    return {"status": "running"}
