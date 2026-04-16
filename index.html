@@ -1,91 +1,91 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Zenith OS FINAL</title>
-  <style>
-    body{
-      margin:0;
-      background:#020405;
-      color:#00ff88;
-      font-family: monospace;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      height:100vh;
-    }
+<meta charset="utf-8">
+<title>Zenith OS ALL-IN-ONE</title>
 
-    .grid{
-      width:680px;
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap:10px;
-    }
+<style>
+body{
+  margin:0;
+  background:#020405;
+  color:#00ff88;
+  font-family: monospace;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
 
-    .panel{
-      border:1px solid #00ff88;
-      padding:15px;
-      border-radius:10px;
-    }
+.wrap{
+  width:720px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
 
-    .full{
-      grid-column: span 2;
-    }
+.box{
+  border:1px solid #00ff88;
+  padding:12px;
+  border-radius:10px;
+}
 
-    .title{
-      text-align:center;
-      font-size:18px;
-      margin-bottom:10px;
-    }
+.full{
+  grid-column: span 2;
+}
 
-    .big{
-      font-size:22px;
-      text-align:center;
-      margin:10px 0;
-    }
+.title{
+  text-align:center;
+  font-size:18px;
+}
 
-    canvas{
-      width:100%;
-      height:150px;
-      border:1px solid #00ff88;
-      margin-top:10px;
-    }
+.big{
+  font-size:22px;
+  text-align:center;
+  margin:10px 0;
+}
 
-    select, button{
-      width:100%;
-      padding:10px;
-      margin-top:8px;
-      border:none;
-      background:#00ff88;
-      color:#000;
-      font-weight:bold;
-      cursor:pointer;
-    }
+canvas{
+  width:100%;
+  height:140px;
+  border:1px solid #00ff88;
+}
 
-    .log{
-      height:120px;
-      overflow:auto;
-      font-size:12px;
-      border:1px solid #00ff88;
-      padding:10px;
-    }
+select, button{
+  width:100%;
+  padding:10px;
+  margin-top:6px;
+  border:none;
+  background:#00ff88;
+  color:#000;
+  font-weight:bold;
+  cursor:pointer;
+}
 
-    .alert{
-      text-align:center;
-      margin-top:10px;
-    }
-  </style>
+.log{
+  height:120px;
+  overflow:auto;
+  font-size:12px;
+  border:1px solid #00ff88;
+  padding:8px;
+}
+
+.alert{
+  text-align:center;
+  margin-top:6px;
+}
+</style>
+
 </head>
 
 <body>
 
-<div class="grid">
+<div class="wrap">
 
-  <div class="panel full">
-    <div class="title">ZENITH OS — CORE SYSTEM</div>
+  <div class="box full">
+    <div class="title">ZENITH OS — ALL-IN-ONE CORE ENGINE</div>
   </div>
 
-  <div class="panel">
+  <div class="box">
     <select id="asset" onchange="changeAsset()">
       <option value="XRP">XRP</option>
       <option value="BTC">BTC</option>
@@ -97,105 +97,125 @@
 
     <button onclick="toggleMode()">TOGGLE MODE</button>
 
-    <div class="alert" id="alert">STATUS: NORMAL</div>
+    <div class="alert" id="alert">STATUS: STABLE</div>
   </div>
 
-  <div class="panel">
-    <div class="title">MARKET CHART</div>
+  <div class="box">
     <canvas id="chart"></canvas>
   </div>
 
-  <div class="panel full">
-    <div class="title">SYSTEM LOG</div>
+  <div class="box full">
+    <div class="title">SYSTEM MEMORY</div>
     <div class="log" id="log"></div>
   </div>
 
 </div>
 
 <script>
+
+// CORE STATE ENGINE
 let mode = "AUTO";
 let asset = "XRP";
 let prices = [];
 let log = [];
 
-const canvas = document.getElementById("chart");
-const ctx = canvas.getContext("2d");
-
-function resize(){
-  canvas.width = canvas.offsetWidth;
-  canvas.height = 150;
+// INIT FROM STORAGE
+let saved = localStorage.getItem("zenith");
+if(saved){
+  let data = JSON.parse(saved);
+  log = data.log || [];
+  prices = data.prices || [];
 }
-resize();
-window.onresize = resize;
 
+// SAVE ENGINE
+function save(){
+  localStorage.setItem("zenith", JSON.stringify({log, prices}));
+}
+
+// UI ACTIONS
 function changeAsset(){
   asset = document.getElementById("asset").value;
   prices = [];
   log = [];
+  save();
 }
 
 function toggleMode(){
   mode = mode === "AUTO" ? "MANUAL" : "AUTO";
 }
 
-function drawChart(){
+// CHART ENGINE
+const canvas = document.getElementById("chart");
+const ctx = canvas.getContext("2d");
+
+function resize(){
+  canvas.width = canvas.offsetWidth;
+  canvas.height = 140;
+}
+resize();
+window.onresize = resize;
+
+function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.beginPath();
 
   for(let i=0;i<prices.length;i++){
-    let x = (i / prices.length) * canvas.width;
-    let y = canvas.height - (prices[i] / 2);
+    let x = (i/prices.length)*canvas.width;
+    let y = canvas.height - (prices[i]/2);
 
-    if(i === 0) ctx.moveTo(x,y);
+    if(i===0) ctx.moveTo(x,y);
     else ctx.lineTo(x,y);
   }
 
-  ctx.strokeStyle = "#00ff88";
+  ctx.strokeStyle="#00ff88";
   ctx.stroke();
 }
 
-function setAlert(signal){
-  const alert = document.getElementById("alert");
-
-  if(signal === "BUY") alert.innerText = "ALERT: BUY PRESSURE";
-  else if(signal === "SELL") alert.innerText = "ALERT: SELL PRESSURE";
-  else alert.innerText = "STATUS: STABLE";
+// ALERT ENGINE
+function alert(signal){
+  const a = document.getElementById("alert");
+  a.innerText =
+    signal==="BUY" ? "ALERT: BUY PRESSURE" :
+    signal==="SELL" ? "ALERT: SELL PRESSURE" :
+    "STATUS: STABLE";
 }
 
+// MAIN ENGINE LOOP
 function tick(){
-  const base = asset === "BTC" ? 30000 :
-               asset === "ETH" ? 2000 : 1;
 
-  const change = (Math.random() - 0.5) * 0.03;
-  const price = base * (1 + change);
+  const base =
+    asset==="BTC"?30000:
+    asset==="ETH"?2000:1;
+
+  const change = (Math.random()-0.5)*0.03;
+  const price = base*(1+change);
 
   prices.push(price);
-  if(prices.length > 60) prices.shift();
+  if(prices.length>70) prices.shift();
 
-  let signal = "HOLD";
+  let signal="HOLD";
 
-  if(mode === "AUTO"){
-    if(change > 0.015) signal = "BUY";
-    else if(change < -0.015) signal = "SELL";
-  } else {
-    signal = "MANUAL";
-  }
+  if(mode==="AUTO"){
+    if(change>0.015) signal="BUY";
+    else if(change<-0.015) signal="SELL";
+  } else signal="MANUAL";
 
-  const entry = `${asset} | ${price.toFixed(2)} | ${signal}`;
-  log.push(entry);
-  if(log.length > 40) log.shift();
+  log.push(`${asset} | ${price.toFixed(2)} | ${signal}`);
+  if(log.length>50) log.shift();
 
-  document.getElementById("price").innerText = "PRICE: " + price.toFixed(2);
-  document.getElementById("signal").innerText = "SIGNAL: " + signal;
+  save();
 
-  document.getElementById("log").innerHTML = log.join("<br>");
+  document.getElementById("price").innerText="PRICE: "+price.toFixed(2);
+  document.getElementById("signal").innerText="SIGNAL: "+signal;
+  document.getElementById("log").innerHTML=log.join("<br>");
 
-  drawChart();
-  setAlert(signal);
+  draw();
+  alert(signal);
 }
 
-setInterval(tick, 700);
+setInterval(tick,700);
 tick();
+
 </script>
 
 </body>
