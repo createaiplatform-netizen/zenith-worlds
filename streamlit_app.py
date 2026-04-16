@@ -3,14 +3,9 @@ import alpaca_trade_api as tradeapi
 
 st.title("📊 Trading Dashboard")
 
-st.write("App running")
-
-# =========================
-# INPUT KEYS INSIDE APP
-# =========================
-
 api_key = st.text_input("API Key ID", type="password")
 api_secret = st.text_input("API Secret Key", type="password")
+
 base_url = st.selectbox(
     "Environment",
     ["https://paper-api.alpaca.markets", "https://api.alpaca.markets"]
@@ -18,11 +13,7 @@ base_url = st.selectbox(
 
 api = None
 
-# =========================
-# CONNECT BUTTON
-# =========================
-
-if st.button("Connect to Alpaca"):
+if st.button("Connect & Load Account"):
 
     if api_key and api_secret:
         try:
@@ -35,7 +26,7 @@ if st.button("Connect to Alpaca"):
 
             account = api.get_account()
 
-            st.success("Connected successfully")
+            st.success("Connected")
 
             st.subheader("Account Info")
             st.write("Status:", account.status)
@@ -45,5 +36,6 @@ if st.button("Connect to Alpaca"):
         except Exception as e:
             st.error("Connection failed")
             st.write(e)
+
     else:
-        st.warning("Enter API key + secret first")
+        st.warning("Enter both API Key and Secret")
