@@ -2,24 +2,49 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Zenith Running</title>
+  <title>Zenith World One</title>
+  <style>
+    body {
+      margin:0;
+      background:#000;
+      color:#00ff88;
+      font-family: monospace;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      height:100vh;
+    }
+    .box {
+      border:1px solid #00ff88;
+      padding:20px;
+      width:320px;
+      text-align:center;
+    }
+    .big { font-size:20px; margin-top:10px; }
+  </style>
 </head>
 <body>
 
-<h2>ZENITH IS RUNNING</h2>
-<div id="out"></div>
+<div class="box">
+  <div>ZENITH WORLD ONE</div>
+  <div id="price" class="big"></div>
+  <div id="signal" class="big"></div>
+</div>
 
 <script>
-setInterval(() => {
-  const price = (Math.random() * 1.2 + 0.4).toFixed(4);
+function tick(){
+  const price = (Math.random()*1.2+0.4).toFixed(4);
 
   let signal = "HOLD";
-  if (price > 1.2) signal = "BUY";
-  if (price < 0.8) signal = "SELL";
+  if(price > 1.2) signal = "BUY";
+  if(price < 0.8) signal = "SELL";
 
-  document.getElementById("out").innerHTML =
-    "PRICE: " + price + "<br>SIGNAL: " + signal;
-}, 500);
+  document.getElementById("price").innerText = "PRICE: " + price;
+  document.getElementById("signal").innerText = "SIGNAL: " + signal;
+}
+
+setInterval(tick, 800);
+tick();
 </script>
 
 </body>
