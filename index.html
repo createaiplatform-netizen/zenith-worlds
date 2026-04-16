@@ -2,9 +2,9 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Zenith Dashboard v2</title>
+  <title>Zenith OS</title>
   <style>
-    body {
+    body{
       margin:0;
       background:#05070a;
       color:#00ff88;
@@ -15,78 +15,62 @@
       height:100vh;
     }
 
-    .panel {
+    .box{
       width:420px;
       border:1px solid #00ff88;
       padding:20px;
       border-radius:10px;
-      box-shadow:0 0 20px rgba(0,255,136,0.2);
+      text-align:center;
     }
 
-    .title {
-      text-align:center;
+    .title{
       font-size:18px;
       margin-bottom:15px;
     }
 
-    .row {
+    .big{
+      font-size:22px;
+      margin:15px 0;
+    }
+
+    .row{
       display:flex;
       justify-content:space-between;
       margin:8px 0;
     }
 
-    .big {
-      font-size:22px;
-      text-align:center;
-      margin:15px 0;
-    }
-
-    .btns {
-      display:flex;
-      gap:10px;
-      margin-top:15px;
-    }
-
-    button {
-      flex:1;
+    button{
+      margin-top:10px;
+      width:100%;
       padding:10px;
       border:none;
       background:#00ff88;
       color:#000;
       font-weight:bold;
       cursor:pointer;
-      border-radius:5px;
-    }
-
-    button:active {
-      transform:scale(0.98);
     }
   </style>
 </head>
 
 <body>
 
-<div class="panel">
-  <div class="title">ZENITH TRADING DASHBOARD</div>
+<div class="box">
+  <div class="title">ZENITH OS</div>
 
   <div class="big" id="price">PRICE: --</div>
   <div class="big" id="signal">SIGNAL: --</div>
 
-  <div class="row"><span>Status</span><span id="status">LIVE SIM</span></div>
-  <div class="row"><span>Mode</span><span>PAPER</span></div>
+  <div class="row"><span>Mode</span><span id="mode">AUTO</span></div>
 
-  <div class="btns">
-    <button onclick="setMode('BUY')">BUY</button>
-    <button onclick="setMode('SELL')">SELL</button>
-    <button onclick="setMode('AUTO')">AUTO</button>
-  </div>
+  <button onclick="toggleMode()">TOGGLE MODE</button>
 </div>
 
 <script>
-let manual = "AUTO";
+let mode = "AUTO";
 
-function setMode(mode){
-  manual = mode;
+function toggleMode(){
+  mode = mode === "AUTO" ? "MANUAL" : "AUTO";
+  document.getElementById("mode").innerText = mode;
 }
 
 function tick(){
@@ -94,11 +78,11 @@ function tick(){
 
   let signal = "HOLD";
 
-  if(manual === "BUY") signal = "BUY";
-  else if(manual === "SELL") signal = "SELL";
-  else {
+  if(mode === "AUTO"){
     if(price > 1.2) signal = "BUY";
     else if(price < 0.8) signal = "SELL";
+  } else {
+    signal = "MANUAL";
   }
 
   document.getElementById("price").innerText = "PRICE: " + price.toFixed(4);
