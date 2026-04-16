@@ -1,54 +1,116 @@
-import json
 import time
+import os
+import json
+import numpy as np
+import pandas as pd
+import requests
 from datetime import datetime
-from flask import Flask, jsonify, request
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
+
+# =========================
+# CONFIG
+# =========================
+SYMBOL = "XRP"
+INTERVAL = 30  # seconds
+
+MAX_TRADE_USD = 100
+MAX_DAILY_LOSS = -200
+
+LIVE_TRADING = False  # SAFE MODE (DO NOT CHANGE YET)
 
 # =========================
 # SYSTEM STATE
 # =========================
 state = {
-    "system_status": "RUNNING",
-    "kill_switch": False,
-    "risk_level": "LOW",
-    "last_signal": None,
-    "last_action": None,
-    "error_count": 0,
-    "performance": {
-        "trades": 0,
-        "wins": 0,
-        "losses": 0
-    }
+    "pnl": 0,
+    "trades": 0,
+    "kill_switch": False
 }
 
 # =========================
-# PERFORMANCE ENGINE
+# DATA LAYER
 # =========================
-def update_performance(result):
-    state["performance"]["trades"] += 1
+def get_data():
+    r = requests.get(
+        "https://api.coingecko.com/api/v3/coins/ripple/market_chart",
+        params={"vs_currency": "usd", "days": 1}
+    ).json()
 
-    if "EXECUTED" in result or "PAPER TRADE" in result:
-        state["performance"]["wins"] += 1
-    else:
-        state["performance"]["losses"] += 1
+    df = pd.DataFrame(r["prices"], columns=["ts", "price"])
+    return df
 
 # =========================
-# RISK ENGINE (GLOBAL OVERRIDE)
+# SIGNAL ENGINE
 # =========================
-def evaluate_risk():
-    p = state["performance"]
+model = IsolationForest(contamination=0.03)
+scaler = StandardScaler()
 
-    if p["trades"] > 0:
-        win_rate = p["wins"] / p["trades"]
+def generate_signal(df):
+    df = df.copy()
 
-        if win_rate < 0.3 and p["trades"] > 10:
-            state["risk_level"] = "HIGH"
-            state["kill_switch"] = True
+    df["ret"] = np.log(df["price"]).diff()
+    df["vol"] = df["ret"].rolling(20).std()
+    df["mom"] = df["price"].diff(5)
 
-        elif win_rate < 0.5:
-            state["risk_level"] = "MEDIUM"
+    df = df.dropna()
 
+    X = scaler.fit_transform(df[["ret", "vol", "mom"]])
+    model.fit(X)
+
+    df["anomaly"] = model.predict(X)
+    df["score"] = -model.decision_function(X)
+
+    last = df.iloc[-1]
+
+    if last["anomaly"] == -1:
+        if last["mom"] > 0:
+            return "BUY", last["price"], float(last["score"])
         else:
-            state["risk_level"] = "LOW"
+            return "SELL", last["price"], float(last["score"])
+
+    return "HOLD", last["price"], float(last["score"])
+
+# =========================
+# RISK ENGINE
+# =========================
+def risk_check(signal, price):
+    if state["kill_switch"]:
+        return False, "KILL SWITCH ACTIVE"
+
+    if state["pnl"] <= MAX_DAILY_LOSS:
+        state["kill_switch"] = True
+        return False, "MAX LOSS TRIGGERED"
+
+    return True, "OK"
+
+# =========================
+# EXECUTION ENGINE
+# =========================
+def execute_trade(signal, price):
+    qty = MAX_TRADE_USD / price
+
+    if not LIVE_TRADING:
+        return f"PAPER TRADE → {signal} | qty={round(qty,4)}"
+
+    # LIVE MODE (disabled by default)
+    import alpaca_trade_api as tradeapi
+
+    api = tradeapi.REST(
+        os.getenv("ALPACA_KEY"),
+        os.getenv("ALPACA_SECRET"),
+        base_url=os.getenv("ALPACA_URL")
+    )
+
+    api.submit_order(
+        symbol="XRPUSD",
+        qty=qty,
+        side=signal.lower(),
+        type="market",
+        time_in_force="gtc"
+    )
+
+    return "LIVE TRADE EXECUTED"
 
 # =========================
 # LOGGING
@@ -56,65 +118,40 @@ def evaluate_risk():
 def log_event(event):
     event["time"] = str(datetime.utcnow())
 
-    with open("control_log.jsonl", "a") as f:
+    with open("log.jsonl", "a") as f:
         f.write(json.dumps(event) + "\n")
 
 # =========================
-# CONTROL API (REMOTE ACCESS)
+# MAIN LOOP (24/7 ENGINE)
 # =========================
-app = Flask(__name__)
+print("ZENITH ENGINE STARTED")
 
-@app.route("/status")
-def status():
-    evaluate_risk()
-    return jsonify(state)
+while True:
+    try:
+        df = get_data()
 
-@app.route("/kill", methods=["POST"])
-def kill():
-    state["kill_switch"] = True
-    state["system_status"] = "KILLED"
-    log_event({"action": "KILL_SWITCH_TRIGGERED"})
-    return jsonify({"ok": True})
+        signal, price, score = generate_signal(df)
 
-@app.route("/resume", methods=["POST"])
-def resume():
-    state["kill_switch"] = False
-    state["system_status"] = "RUNNING"
-    log_event({"action": "SYSTEM_RESUMED"})
-    return jsonify({"ok": True})
+        allowed, reason = risk_check(signal, price)
 
-@app.route("/update", methods=["POST"])
-def update():
-    data = request.json
-    state["last_signal"] = data.get("signal")
-    state["last_action"] = data.get("result")
-
-    update_performance(data.get("result", ""))
-
-    log_event(data)
-    return jsonify({"ok": True})
-
-# =========================
-# MONITOR LOOP (HEARTBEAT)
-# =========================
-def heartbeat():
-    while True:
-        evaluate_risk()
+        if allowed and signal != "HOLD":
+            result = execute_trade(signal, price)
+            state["trades"] += 1
+        else:
+            result = f"BLOCKED → {reason}"
 
         log_event({
-            "heartbeat": True,
-            "state": state
+            "signal": signal,
+            "price": float(price),
+            "score": score,
+            "result": result,
+            "trades": state["trades"]
         })
 
-        time.sleep(60)
+        print(signal, price, score, result)
 
-# =========================
-# START SYSTEM
-# =========================
-if __name__ == "__main__":
-    from threading import Thread
+        time.sleep(INTERVAL)
 
-    Thread(target=heartbeat).start()
-
-    print("ZENITH CONTROL CENTER LIVE")
-    app.run(host="0.0.0.0", port=8000)
+    except Exception as e:
+        log_event({"error": str(e)})
+        time.sleep(10)
