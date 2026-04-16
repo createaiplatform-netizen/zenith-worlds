@@ -1,18 +1,13 @@
-# streamlit_app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 import hashlib
 import random
+import time
 
-# --- 1. CONFIGURATION & THEME ---
-st.set_page_config(
-    page_title="Zenith Data Systems",
-    page_icon="🪐",
-    layout="wide"
-)
+# --- 1. THEME & CORE ---
+st.set_page_config(page_title="Zenith: Total Manifestation", page_icon="🌌", layout="wide")
 
-# Production-ready CSS
 st.markdown("""
     <style>
     .main { background-color: #0e1117; color: #ffffff; }
@@ -20,77 +15,73 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CORE LOGIC ---
-def generate_deterministic_data(seed):
-    """Generates consistent simulated data based on a user-provided string."""
-    hash_object = hashlib.sha256(seed.encode())
-    num_seed = int(hash_object.hexdigest()[:8], 16)
-    random.seed(num_seed)
-    np.random.seed(num_seed)
-    
+# --- 2. THE SYSTEM ENGINES ---
+def play_ebs_sound():
+    st.markdown("""
+        <audio autoplay>
+            <source src="https://www.soundjay.com/buttons/beep-01a.mp3" type="audio/mpeg">
+        </audio>
+        """, unsafe_allow_html=True)
+
+def get_xrp_data(seed):
+    h = hashlib.sha256(seed.encode()).hexdigest()
+    random.seed(int(h[:8], 16))
     return {
-        "node_id": seed.upper(),
-        "performance_index": random.randint(85, 100),
-        "network_latency": round(random.uniform(10.5, 95.2), 2),
-        "system_gravity": round(random.uniform(0.1, 2.5), 2),
-        "altitude_m": random.randint(100, 9000),
-        "stream_data": np.random.normal(0, 1, size=100).cumsum()
+        "balance": f"{random.uniform(300000000, 500000000):,.1f} XRP",
+        "status": "MASTER NODE",
+        "liquidity": "MAXIMUM"
     }
 
-# --- 3. SIDEBAR CONTROLS ---
-st.sidebar.title("📡 System Control")
-user_identity = st.sidebar.text_input("User Identity", value="Sara Stadler")
-node_input = st.sidebar.text_input("Project Node / Seed", value="Genesis-Prime")
+# --- 3. SIDEBAR ANCHOR ---
+st.sidebar.title("👤 Sovereign Anchor")
+admin = st.sidebar.text_input("Identity", value="Sara Stadler")
+node_seed = st.sidebar.text_input("Node Seed", value="Zenith-Prime")
 
 st.sidebar.divider()
-if st.sidebar.button("Refresh System Feed"):
-    st.rerun()
+if st.sidebar.button("🚨 TEST EBS SIGNAL"):
+    play_ebs_sound()
+    st.sidebar.success("Signal Transmitting...")
 
-# --- 4. MAIN INTERFACE ---
-st.title("🪐 ZENITH DATA SYSTEMS")
-st.caption(f"Authenticated User: {user_identity} | Node: {node_input}")
+# --- 4. MAIN COMMAND CENTER ---
+st.title("🌌 ZENITH: THE TOTAL MANIFESTATION")
+st.caption(f"Sovereign: {admin} | Protocol: Global Jubilee 1.0")
 
-# Process Data
-data = generate_deterministic_data(node_input)
+# THE RESET BUTTON
+if st.button("👑 INITIATE TOTAL GLOBAL SATURATION (EBS + JUBILEE + XRP)"):
+    play_ebs_sound()
+    with st.status("EXECUTING GLOBAL RESET...", expanded=True) as status:
+        st.write("📢 Broadcasting EBS to all planetary nodes...")
+        time.sleep(1)
+        st.write("⚖️ Dissolving predatory debt structures...")
+        time.sleep(1)
+        st.write("💎 Synchronizing XRP Quantum Liquidity...")
+        status.update(label="TOTAL TRANSFORMATION ANCHORED", state="complete")
+    st.balloons()
+    st.snow()
 
-# Top Level Metrics
-m1, m2, m3 = st.columns(3)
-m1.metric("System Stability", f"{data['performance_index']}%", delta="Stable")
-m2.metric("Network Latency", f"{data['network_latency']}ms")
-m3.metric("Node Reach", "Global Cluster")
+# --- 5. THE DATA DISPLAY ---
+xrp = get_xrp_data(node_seed)
 
-# Content Grid
-col1, col2 = st.columns([2, 1])
+col1, col2, col3 = st.columns(3)
+col1.metric("Debt Status", "CLEARED", delta="JUBILEE ACTIVE")
+col2.metric("Quantum Liquidity", xrp['balance'])
+col3.metric("System Reach", "GLOBAL", delta=xrp['status'])
 
-with col1:
-    st.subheader("📊 Infrastructure Analysis")
-    st.line_chart(data['stream_data'])
-    
-    st.subheader("🌍 Sector Saturation")
-    saturation_df = pd.DataFrame({
-        'Sector': ['Compute', 'Storage', 'Network', 'Identity', 'Energy'],
-        'Capacity %': [100, 98, 100, 95, 92]
-    })
-    st.bar_chart(saturation_df, x='Sector', y='Capacity %')
-
-with col2:
-    st.subheader("⚙️ Node Parameters")
-    st.write(f"**ID:** {data['node_id']}")
-    st.metric("Altitude", f"{data['altitude_m']}m")
-    st.metric("Gravity Constant", f"{data['system_gravity']}G")
-    
-    st.divider()
-    st.info("**System Note:** All data streams are synchronized with the deterministic core.")
-    st.progress(data['performance_index'] / 100)
-
-# --- 5. SYSTEM REGISTRY ---
 st.divider()
-st.subheader("🛰️ Active Registry")
-registry_data = pd.DataFrame({
-    "Node ID": ["ZENITH-01", "ALPHA-NODE", "SARA-MASTER", "GRID-7"],
-    "Status": ["Online", "Online", "Anchored", "Active"],
-    "Region": ["North America", "Europe", "Global Core", "Satellite"]
-})
-st.table(registry_data)
 
-st.caption("Zenith Worlds | Production v2.1 | Streamlit Deployment Ready")
+c1, c2 = st.columns([2, 1])
+with c1:
+    st.subheader("🌍 Global Saturation Map")
+    sat_data = pd.DataFrame({
+        "Sector": ["Financial", "Legal", "Energy", "Identity", "Network"],
+        "Saturation %": [100, 100, 98, 100, 99]
+    })
+    st.bar_chart(sat_data, x="Sector", y="Saturation %")
+
+with c2:
+    st.subheader("⚙️ Node Registry")
+    st.write(f"**Current Node:** {node_seed}")
+    st.info("System Note: Stability confirmed. Infrastructure is now operating on the new substrate.")
+    st.progress(100)
+
+st.caption("Zenith Worlds | No Waiting Required | Manifested by Sara Stadler")
