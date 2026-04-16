@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Zenith OS v3</title>
+  <title>Zenith OS v4</title>
   <style>
     body{
       margin:0;
@@ -16,7 +16,7 @@
     }
 
     .box{
-      width:500px;
+      width:520px;
       border:1px solid #00ff88;
       padding:20px;
       border-radius:10px;
@@ -28,20 +28,20 @@
       margin-bottom:10px;
     }
 
-    .row{
-      display:flex;
-      justify-content:space-between;
-      margin:5px 0;
-    }
-
     .big{
       font-size:22px;
       text-align:center;
       margin:10px 0;
     }
 
+    .row{
+      display:flex;
+      justify-content:space-between;
+      margin:5px 0;
+    }
+
     .history{
-      height:120px;
+      height:140px;
       overflow:auto;
       border:1px solid #00ff88;
       padding:10px;
@@ -65,7 +65,7 @@
 <body>
 
 <div class="box">
-  <div class="title">ZENITH OS v3</div>
+  <div class="title">ZENITH OS v4 (STATE ENGINE)</div>
 
   <select id="asset" onchange="changeAsset()">
     <option value="XRP">XRP</option>
@@ -77,8 +77,10 @@
   <div class="big" id="signal">SIGNAL: --</div>
 
   <div class="row"><span>Asset</span><span id="currentAsset">XRP</span></div>
+  <div class="row"><span>State</span><span id="state">ACTIVE</span></div>
 
   <button onclick="toggleMode()">TOGGLE MODE</button>
+  <button onclick="clearHistory()">RESET MEMORY</button>
 
   <div class="history" id="history"></div>
 </div>
@@ -86,44 +88,58 @@
 <script>
 let mode = "AUTO";
 let asset = "XRP";
-let history = [];
+
+// persistent memory
+let history = JSON.parse(localStorage.getItem("zenith_history") || "[]");
+
+function save(){
+  localStorage.setItem("zenith_history", JSON.stringify(history));
+}
 
 function changeAsset(){
   asset = document.getElementById("asset").value;
-  history = [];
 }
 
 function toggleMode(){
   mode = mode === "AUTO" ? "MANUAL" : "AUTO";
 }
 
+function clearHistory(){
+  history = [];
+  save();
+}
+
 function tick(){
   const base = asset === "BTC" ? 30000 :
                asset === "ETH" ? 2000 : 1;
 
-  const price = base + (Math.random() * base * 0.02);
+  const noise = (Math.random() - 0.5) * 0.02;
+  const price = base * (1 + noise);
 
   let signal = "HOLD";
 
   if(mode === "AUTO"){
-    if(price > base * 1.01) signal = "BUY";
-    else if(price < base * 0.99) signal = "SELL";
+    if(noise > 0.01) signal = "BUY";
+    else if(noise < -0.01) signal = "SELL";
   } else {
     signal = "MANUAL";
   }
 
-  const entry = `${asset} P:${price.toFixed(2)} | S:${signal}`;
+  const entry = `${asset} | ${price.toFixed(2)} | ${signal}`;
   history.push(entry);
 
-  if(history.length > 20) history.shift();
+  if(history.length > 30) history.shift();
+
+  save();
 
   document.getElementById("price").innerText = "PRICE: " + price.toFixed(2);
   document.getElementById("signal").innerText = "SIGNAL: " + signal;
   document.getElementById("currentAsset").innerText = asset;
+
   document.getElementById("history").innerHTML = history.join("<br>");
 }
 
-setInterval(tick, 700);
+setInterval(tick, 800);
 tick();
 </script>
 
