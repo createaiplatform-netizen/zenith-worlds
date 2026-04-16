@@ -1,13 +1,23 @@
-# risk.py
+# memory.py
+import sqlite3
+from datetime import datetime
 
-class RiskEngine:
+class Memory:
 
     def __init__(self):
-        self.max_daily_loss = -200
-        self.exposure_limit = 0.2
+        self.conn = sqlite3.connect("brain.db", check_same_thread=False)
+        self.conn.execute("""
+        CREATE TABLE IF NOT EXISTS trades (
+            time TEXT,
+            symbol TEXT,
+            side TEXT,
+            qty INTEGER
+        )
+        """)
 
-    def allow_trade(self, pnl):
-        return pnl > self.max_daily_loss
-
-    def position_size(self, cash, price):
-        return max(int((cash * self.exposure_limit) / price), 1)
+    def log(self, symbol, side, qty):
+        self.conn.execute(
+            "INSERT INTO trades VALUES (?, ?, ?, ?)",
+            (str(datetime.now()), symbol, side, qty)
+        )
+        self.conn.commit()
