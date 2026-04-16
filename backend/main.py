@@ -5,14 +5,10 @@ import os
 
 app = FastAPI()
 
-API_KEY = os.getenv("ALPACA_API_KEY")
-API_SECRET = os.getenv("ALPACA_API_SECRET")
-BASE_URL = "https://paper-api.alpaca.markets"
-
 api = tradeapi.REST(
-    API_KEY,
-    API_SECRET,
-    BASE_URL,
+    os.getenv("ALPACA_API_KEY"),
+    os.getenv("ALPACA_API_SECRET"),
+    "https://paper-api.alpaca.markets",
     api_version="v2"
 )
 
@@ -43,9 +39,8 @@ def cycle(symbol: str = "AAPL"):
     prices = [b.c for b in bars]
 
     decision = brain(prices)
-
     price = prices[-1]
-    qty = max(int((cash * 0.05) / price), 1)
+    qty = max(int((cash * 0.01) / price), 1)
 
     if decision == "BUY":
         api.submit_order(symbol, qty, "buy", "market", "day")
@@ -53,8 +48,9 @@ def cycle(symbol: str = "AAPL"):
     elif decision == "SELL":
         api.submit_order(symbol, qty, "sell", "market", "day")
 
-    return {"symbol": symbol, "decision": decision, "qty": qty}
-
-@app.get("/status")
-def status():
-    return {"status": "running"}
+    return {
+        "symbol": symbol,
+        "decision": decision,
+        "qty": qty,
+        "price": price
+    }
