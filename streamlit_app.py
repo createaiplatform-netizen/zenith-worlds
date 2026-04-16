@@ -1,7 +1,13 @@
 import streamlit as st
 import alpaca_trade_api as tradeapi
 
-st.title("📊 Trading Dashboard")
+st.set_page_config(page_title="AI Trading System", layout="wide")
+
+st.title("📊 AI Trading System Dashboard")
+
+# =========================
+# KEYS
+# =========================
 
 api_key = st.text_input("API Key ID", type="password")
 api_secret = st.text_input("API Secret Key", type="password")
@@ -13,9 +19,14 @@ base_url = st.selectbox(
 
 api = None
 
-if st.button("Connect & Load Account"):
+# =========================
+# CONNECT
+# =========================
+
+if st.button("Initialize System"):
 
     if api_key and api_secret:
+
         try:
             api = tradeapi.REST(
                 api_key,
@@ -26,16 +37,75 @@ if st.button("Connect & Load Account"):
 
             account = api.get_account()
 
-            st.success("Connected")
+            st.success("System Online")
 
-            st.subheader("Account Info")
-            st.write("Status:", account.status)
-            st.write("Buying Power:", account.buying_power)
-            st.write("Cash:", account.cash)
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("Status", account.status)
+
+            with col2:
+                st.metric("Buying Power", account.buying_power)
+
+            with col3:
+                st.metric("Cash", account.cash)
+
+            # =========================
+            # POSITIONS
+            # =========================
+
+            st.subheader("📦 Open Positions")
+
+            positions = api.list_positions()
+
+            if positions:
+                for p in positions:
+                    st.write(f"{p.symbol} | Qty: {p.qty} | P/L: {p.unrealized_pl}")
+            else:
+                st.write("No open positions")
 
         except Exception as e:
-            st.error("Connection failed")
+            st.error("System failed to initialize")
             st.write(e)
 
     else:
-        st.warning("Enter both API Key and Secret")
+        st.warning("Missing credentials")
+
+# =========================
+# TRADING PANEL
+# =========================
+
+st.subheader("💱 Trade Panel")
+
+symbol = st.text_input("Symbol (e.g. AAPL)")
+qty = st.number_input("Quantity", min_value=1, step=1)
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("BUY"):
+        try:
+            api.submit_order(
+                symbol=symbol,
+                qty=qty,
+                side="buy",
+                type="market",
+                time_in_force="day"
+            )
+            st.success(f"BUY order sent: {symbol}")
+        except Exception as e:
+            st.error(e)
+
+with col2:
+    if st.button("SELL"):
+        try:
+            api.submit_order(
+                symbol=symbol,
+                qty=qty,
+                side="sell",
+                type="market",
+                time_in_force="day"
+            )
+            st.success(f"SELL order sent: {symbol}")
+        except Exception as e:
+            st.error(e)
