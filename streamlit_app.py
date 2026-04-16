@@ -2,17 +2,27 @@ import streamlit as st
 import alpaca_trade_api as tradeapi
 import numpy as np
 
-st.title("🧠 Simple AI Trading Bot")
+st.title("🧠 AI Trading Bot (Simple Mode)")
+
+# =========================
+# INPUTS
+# =========================
 
 api_key = st.text_input("API Key", type="password")
 api_secret = st.text_input("API Secret", type="password")
-
 symbol = st.text_input("Symbol", "AAPL")
 
 base_url = "https://paper-api.alpaca.markets"
 
+# =========================
+# AI BRAIN
+# =========================
+
 def brain(prices):
     prices = np.array(prices)
+
+    if len(prices) < 20:
+        return "HOLD"
 
     short = np.mean(prices[-5:])
     long = np.mean(prices[-20:])
@@ -23,17 +33,24 @@ def brain(prices):
         return "SELL"
     return "HOLD"
 
-if st.button("RUN AI"):
+# =========================
+# RUN BOT
+# =========================
 
-    if api_key and api_secret:
+if st.button("RUN AI TRADE"):
 
-        api = tradeapi.REST(
-            api_key,
-            api_secret,
-            base_url,
-            api_version="v2"
-        )
+    if not api_key or not api_secret:
+        st.warning("Put API Key + Secret first")
+        st.stop()
 
+    api = tradeapi.REST(
+        api_key,
+        api_secret,
+        base_url,
+        api_version="v2"
+    )
+
+    try:
         account = api.get_account()
         cash = float(account.cash)
 
@@ -57,5 +74,8 @@ if st.button("RUN AI"):
             api.submit_order(symbol, qty, "sell", "market", "day")
             st.success("SELL SENT")
 
-    else:
-        st.warning("Enter API keys")
+        else:
+            st.info("HOLD - no trade")
+
+    except Exception as e:
+        st.error(str(e))
