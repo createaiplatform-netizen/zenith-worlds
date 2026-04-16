@@ -1,80 +1,56 @@
+import streamlit as st
 import numpy as np
 import pandas as pd
 import requests
-import yfinance as yf
-from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 # =========================
-# LIQUIDITY INTELLIGENCE ENGINE
+# DATA
 # =========================
+@st.cache_data(ttl=30)
+def load_data():
+    url = "https://api.coingecko.com/api/v3/coins/ripple/market_chart"
+    params = {"vs_currency": "usd", "days": 30}
+    r = requests.get(url, params=params).json()
 
-class LiquidityEngine:
+    df = pd.DataFrame(r["prices"], columns=["ts", "price"])
+    df["time"] = pd.to_datetime(df["ts"], unit="ms")
+    return df
+
+# =========================
+# LIQUIDITY CHECK (NO EXTRA FILES)
+# =========================
+def liquidity_state(df):
+    df = df.copy()
+    df["ret"] = df["price"].pct_change()
+    vol = df["ret"].rolling(10).std().iloc[-1]
+
+    if vol > 0.03:
+        return "🔴 LIQUIDITY CONTRACTING", vol
+    elif vol < 0.01:
+        return "🟢 LIQUIDITY EXPANDING", vol
+    else:
+        return "🟡 NEUTRAL", vol
+
+# =========================
+# ZENITH ENGINE
+# =========================
+class Zenith:
     def __init__(self):
+        self.model = IsolationForest(contamination=0.03, n_estimators=200)
         self.scaler = StandardScaler()
-        self.model = IsolationForest(
-            n_estimators=300,
-            contamination=0.05,
-            random_state=42
-        )
 
-    # -------------------------
-    # DATA COLLECTION LAYER
-    # -------------------------
-    def get_macro_data(self):
-        try:
-            dxy = yf.download("DX-Y.NYB", period="3mo")["Close"]
-            vix = yf.download("^VIX", period="3mo")["Close"]
-            spx = yf.download("^GSPC", period="3mo")["Close"]
-            btc = yf.download("BTC-USD", period="3mo")["Close"]
-
-            df = pd.DataFrame({
-                "dxy": dxy,
-                "vix": vix,
-                "spx": spx,
-                "btc": btc
-            }).dropna()
-
-            return df
-
-        except Exception:
-            return pd.DataFrame()
-
-    # -------------------------
-    # FEATURE ENGINEERING
-    # -------------------------
-    def features(self, df):
+    def run(self, df):
         df = df.copy()
 
-        df["dxy_change"] = df["dxy"].pct_change()
-        df["vix_change"] = df["vix"].pct_change()
-        df["spx_return"] = df["spx"].pct_change()
-        df["btc_return"] = df["btc"].pct_change()
-
-        df["risk_on"] = df["spx_return"] + df["btc_return"]
-        df["risk_off"] = df["dxy_change"] + df["vix_change"]
-
-        df["liquidity_proxy"] = df["risk_on"] - df["risk_off"]
+        df["log_ret"] = np.log(df["price"]).diff()
+        df["vol"] = df["log_ret"].rolling(20).std()
+        df["mom"] = df["price"].diff(5)
 
         df = df.dropna()
-        return df
 
-    # -------------------------
-    # INTELLIGENCE CORE
-    # -------------------------
-    def analyze(self, df):
-        df = self.features(df)
-
-        X = self.scaler.fit_transform(
-            df[[
-                "dxy_change",
-                "vix_change",
-                "spx_return",
-                "btc_return",
-                "liquidity_proxy"
-            ]]
-        )
-
+        X = self.scaler.fit_transform(df[["log_ret", "vol", "mom"]])
         self.model.fit(X)
 
         df["anomaly"] = self.model.predict(X)
@@ -82,29 +58,35 @@ class LiquidityEngine:
 
         last = df.iloc[-1]
 
-        # -------------------------
-        # REGIME LOGIC
-        # -------------------------
-        if last["liquidity_proxy"] > 0.002:
-            regime = "🟢 LIQUIDITY EXPANDING"
-        elif last["liquidity_proxy"] < -0.002:
-            regime = "🔴 LIQUIDITY CONTRACTING"
+        if last["anomaly"] == -1:
+            state = "🚀 EXPANSION" if last["mom"] > 0 else "⚠️ DISTRIBUTION"
         else:
-            regime = "🟡 NEUTRAL FLOW"
+            state = "⚖️ EQUILIBRIUM"
 
-        confidence = float(min(1.0, abs(last["score"])))
-
-        return df, regime, confidence
-
+        return df, state, float(last["score"])
 
 # =========================
-# STANDALONE TEST
+# APP
 # =========================
-if __name__ == "__main__":
-    engine = LiquidityEngine()
-    df = engine.get_macro_data()
+st.title("ZENITH — LIVE SYSTEM (SIMPLE VERSION)")
 
-    if not df.empty:
-        data, regime, conf = engine.analyze(df)
-        print("REGIME:", regime)
-        print("CONFIDENCE:", conf)
+df = load_data()
+
+liq_state, vol = liquidity_state(df)
+
+engine = Zenith()
+data, state, score = engine.run(df)
+
+# SIMPLE RULE LINK
+if "LIQUIDITY CONTRACTING" in liq_state:
+    state = "⚠️ DISTRIBUTION (LIQUIDITY RISK)"
+
+# =========================
+# DISPLAY
+# =========================
+st.metric("ZENITH STATE", state)
+st.metric("LIQUIDITY", liq_state)
+st.metric("ANOMALY SCORE", round(score, 4))
+st.metric("VOLATILITY", round(vol, 5))
+
+st.line_chart(data.set_index("time")[["price", "score"]])
