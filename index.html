@@ -4,46 +4,55 @@ import alpaca_trade_api as tradeapi
 st.title("📊 Trading Dashboard")
 
 # =========================
-# SAFE SECRET LOADING
+# LOAD SECRETS
 # =========================
 
-try:
-    API_KEY = st.secrets["APCA_API_KEY_ID"]
-    API_SECRET = st.secrets["APCA_API_SECRET_KEY"]
-    BASE_URL = st.secrets.get("BASE_URL", "https://paper-api.alpaca.markets")
-
-    api = tradeapi.REST(
-        API_KEY,
-        API_SECRET,
-        base_url=BASE_URL,
-        api_version="v2"
-    )
-
-    st.success("✅ Alpaca connected")
-
-except Exception as e:
-    st.error("❌ Connection issue")
-    st.write(e)
-    api = None
+API_KEY = st.secrets.get("APCA_API_KEY_ID")
+API_SECRET = st.secrets.get("APCA_API_SECRET_KEY")
+BASE_URL = st.secrets.get("BASE_URL", "https://paper-api.alpaca.markets")
 
 # =========================
-# UI ALWAYS RENDERS
+# ALWAYS SHOW UI FIRST
 # =========================
 
-st.subheader("System Status")
+st.write("App is running")
+
+# =========================
+# INIT API SAFELY
+# =========================
+
+api = None
+
+if API_KEY and API_SECRET:
+    try:
+        api = tradeapi.REST(
+            API_KEY,
+            API_SECRET,
+            base_url=BASE_URL,
+            api_version="v2"
+        )
+        st.success("Connected to Alpaca")
+    except Exception as e:
+        st.error("API init failed")
+        st.write(e)
+else:
+    st.warning("Missing API keys")
+
+# =========================
+# DASHBOARD OUTPUT
+# =========================
 
 if api:
     try:
         account = api.get_account()
 
-        st.write("Account Status:", account.status)
+        st.subheader("Account Info")
+        st.write("Status:", account.status)
         st.write("Buying Power:", account.buying_power)
         st.write("Cash:", account.cash)
 
     except Exception as e:
-        st.error("Failed to fetch account data")
+        st.error("Failed to load account")
         st.write(e)
-else:
-    st.warning("API not initialized")
 
 st.button("Refresh")
