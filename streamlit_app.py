@@ -1,10 +1,10 @@
 import streamlit as st
 import alpaca_trade_api as tradeapi
 import numpy as np
-import time
+import sqlite3
 from datetime import datetime
 
-st.title("🧠 100% AI Trading Brain System")
+st.title("🧠 AI Trading Brain (Single File Version)")
 
 # =========================
 # INPUTS
@@ -18,14 +18,25 @@ symbol = st.text_input("Symbol", "AAPL")
 base_url = "https://paper-api.alpaca.markets"
 
 # =========================
-# MEMORY
+# MEMORY (NO BACKEND NEEDED)
 # =========================
 
-if "log" not in st.session_state:
-    st.session_state.log = []
+conn = sqlite3.connect("trades.db", check_same_thread=False)
+conn.execute("""
+CREATE TABLE IF NOT EXISTS trades (
+    time TEXT,
+    symbol TEXT,
+    side TEXT,
+    qty INTEGER
+)
+""")
 
-if "running" not in st.session_state:
-    st.session_state.running = False
+def log_trade(symbol, side, qty):
+    conn.execute(
+        "INSERT INTO trades VALUES (?, ?, ?, ?)",
+        (str(datetime.now()), symbol, side, qty)
+    )
+    conn.commit()
 
 # =========================
 # AI BRAIN
@@ -36,10 +47,9 @@ def brain(prices):
 
     short = np.mean(prices[-5:])
     long = np.mean(prices[-20:])
-    momentum = prices[-1] - prices[-3]
+    momentum = prices[-3] - prices[-10]
 
     score = 0
-
     score += 1 if short > long else -1
     score += 1 if momentum > 0 else -1
 
@@ -50,18 +60,17 @@ def brain(prices):
     return "HOLD"
 
 # =========================
-# RISK ENGINE
+# POSITION SIZE
 # =========================
 
 def size(cash, price):
-    risk = 0.05
-    return max(int((cash * risk) / price), 1)
+    return max(int((cash * 0.05) / price), 1)
 
 # =========================
-# START SYSTEM
+# RUN SYSTEM
 # =========================
 
-if st.button("START AUTONOMOUS AI"):
+if st.button("RUN AI CYCLE"):
 
     if api_key and api_secret:
 
@@ -75,53 +84,35 @@ if st.button("START AUTONOMOUS AI"):
         account = api.get_account()
         cash = float(account.cash)
 
-        st.success("AI SYSTEM ONLINE")
+        st.success("Connected")
 
         bars = api.get_bars(symbol, "1Min", limit=30)
         prices = [b.c for b in bars]
 
         decision = brain(prices)
-
         price = prices[-1]
         qty = size(cash, price)
 
-        st.subheader("AI Decision")
-        st.write(decision)
-
+        st.write("Decision:", decision)
         st.write("Price:", price)
         st.write("Qty:", qty)
 
-        # =========================
-        # EXECUTION
-        # =========================
-
         if decision == "BUY":
             api.submit_order(symbol, qty, "buy", "market", "day")
-            st.session_state.log.append(f"{datetime.now()} BUY {qty}")
+            log_trade(symbol, "BUY", qty)
+            st.success("BUY SENT")
 
         elif decision == "SELL":
             api.submit_order(symbol, qty, "sell", "market", "day")
-            st.session_state.log.append(f"{datetime.now()} SELL {qty}")
+            log_trade(symbol, "SELL", qty)
+            st.success("SELL SENT")
 
-        # =========================
-        # MEMORY
-        # =========================
+        st.subheader("Trade History")
 
-        st.subheader("Trade Memory")
+        rows = conn.execute("SELECT * FROM trades ORDER BY time DESC LIMIT 10").fetchall()
 
-        for item in st.session_state.log[-10:]:
-            st.write(item)
-
-        # =========================
-        # PORTFOLIO
-        # =========================
-
-        st.subheader("Portfolio")
-
-        positions = api.list_positions()
-
-        for p in positions:
-            st.write(f"{p.symbol} | {p.qty} | PnL: {p.unrealized_pl}")
+        for r in rows:
+            st.write(r)
 
     else:
         st.warning("Enter API keys")
