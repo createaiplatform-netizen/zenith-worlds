@@ -10,6 +10,7 @@ while True:
     try:
         r = requests.get(API_URL, params={"symbol": SYMBOL}, timeout=20)
         print(r.json())
+
     except Exception as e:
         print("error:", e)
 
