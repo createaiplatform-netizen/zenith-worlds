@@ -2,17 +2,30 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import requests
-import time
+import alpaca_trade_api as tradeapi
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 # =========================
+# CONFIG / SAFETY
+# =========================
+SYMBOL = "XRPUSD"
+MAX_TRADES_PER_SESSION = 3
+
+if "trade_count" not in st.session_state:
+    st.session_state.trade_count = 0
+
+if "log" not in st.session_state:
+    st.session_state.log = []
+
+# =========================
 # DATA LAYER
 # =========================
+@st.cache_data(ttl=30)
 def get_data():
     url = "https://api.coingecko.com/api/v3/coins/ripple/market_chart"
     params = {"vs_currency": "usd", "days": 30}
-    r = requests.get(url, params=params).json()
+    r = requests.get(url, params=params, timeout=10).json()
 
     df = pd.DataFrame(r["prices"], columns=["ts", "price"])
     df["time"] = pd.to_datetime(df["ts"], unit="ms")
@@ -22,9 +35,13 @@ def get_data():
 # =========================
 # SIGNAL ENGINE
 # =========================
-class ZenithSignal:
+class ZenithEngine:
     def __init__(self):
-        self.model = IsolationForest(n_estimators=300, contamination=0.03)
+        self.model = IsolationForest(
+            n_estimators=300,
+            contamination=0.03,
+            random_state=42
+        )
         self.scaler = StandardScaler()
 
     def features(self, df):
@@ -35,6 +52,7 @@ class ZenithSignal:
         df["momentum"] = df["price"].diff(5)
         df["trend"] = df["price"].rolling(30).mean()
         df["trend_dev"] = df["price"] / (df["trend"] + 1e-9)
+        df["acceleration"] = df["momentum"].diff()
 
         return df.dropna()
 
@@ -42,7 +60,13 @@ class ZenithSignal:
         df = self.features(df)
 
         X = self.scaler.fit_transform(
-            df[["log_return", "volatility", "momentum", "trend_dev"]]
+            df[[
+                "log_return",
+                "volatility",
+                "momentum",
+                "trend_dev",
+                "acceleration"
+            ]]
         )
 
         self.model.fit(X)
@@ -66,51 +90,124 @@ class ZenithSignal:
 
 
 # =========================
-# RISK FIREWALL (REAL INSTITUTIONAL CONCEPT)
+# RISK ENGINE
 # =========================
-def risk_firewall(conf, vol, equity=1000):
-    exposure = conf * equity
+def risk_engine(conf, vol):
+    risk = conf * (1 + vol * 10)
 
-    max_exposure = equity * 0.25
-    if exposure > max_exposure:
-        return "RISK CUT", 0.0
-
-    if vol > 0.05:
-        return "VOLATILITY HALT", 0.0
-
-    if conf < 0.2:
-        return "NO TRADE", 0.0
-
-    return "OK", exposure
+    if risk < 0.4:
+        return "LOW", risk
+    elif risk < 1.0:
+        return "MEDIUM", risk
+    return "HIGH", risk
 
 
-# =========================
-# EXECUTION ENGINE (SIMULATED)
-# =========================
-def execute(signal, exposure):
-    return {
-        "signal": signal,
-        "order_type": "MARKET_SIM",
-        "exposure": round(exposure, 2),
-        "status": "FILLED_SIMULATION"
-    }
+def position_size(risk_label):
+    if risk_label == "LOW":
+        return 1.0
+    if risk_label == "MEDIUM":
+        return 0.5
+    return 0.25
 
 
 # =========================
-# STREAMLIT STATE
+# ALPACA BROKER (PAPER)
 # =========================
-st.set_page_config(page_title="ZENITH INSTITUTIONAL STACK", layout="wide")
-st.title("🏛️ ZENITH — Institutional Live Trading Stack (SIMULATED)")
+def get_broker():
+    return tradeapi.REST(
+        st.secrets["ALPACA_API_KEY"],
+        st.secrets["ALPACA_SECRET_KEY"],
+        st.secrets["BASE_URL"],
+        api_version="v2"
+    )
+
+
+def get_position(api):
+    try:
+        pos = api.get_position(SYMBOL)
+        return float(pos.qty)
+    except:
+        return 0.0
+
+
+def execute_trade(signal, size):
+    api = get_broker()
+
+    if st.session_state.trade_count >= MAX_TRADES_PER_SESSION:
+        return {"status": "BLOCKED", "reason": "trade_limit_reached"}
+
+    qty = max(1, round(size * 10, 2))
+
+    position = get_position(api)
+
+    # BUY LOGIC
+    if signal == "EXPANSION":
+        api.submit_order(
+            symbol=SYMBOL,
+            qty=qty,
+            side="buy",
+            type="market",
+            time_in_force="gtc"
+        )
+
+        st.session_state.trade_count += 1
+
+        return {
+            "action": "BUY",
+            "qty": qty,
+            "status": "submitted"
+        }
+
+    # SELL LOGIC
+    if signal == "DISTRIBUTION" and position > 0:
+        api.submit_order(
+            symbol=SYMBOL,
+            qty=abs(position),
+            side="sell",
+            type="market",
+            time_in_force="gtc"
+        )
+
+        st.session_state.trade_count += 1
+
+        return {
+            "action": "SELL",
+            "qty": position,
+            "status": "submitted"
+        }
+
+    return {"action": "HOLD", "status": "no_trade"}
+
+
+# =========================
+# APP
+# =========================
+st.set_page_config(page_title="ZENITH LIVE TRADING", layout="wide")
+st.title("🏛️ ZENITH — Live Trading System (PAPER)")
 
 df = get_data()
 
-engine = ZenithSignal()
+engine = ZenithEngine()
 data, state, conf = engine.run(df)
 
 vol = data["volatility"].iloc[-1]
 
-risk_status, exposure = risk_firewall(conf, vol)
-exec_report = execute(state, exposure)
+risk_label, risk_value = risk_engine(conf, vol)
+size = position_size(risk_label)
+
+signal = state
+
+trade_result = execute_trade(signal, size)
+
+# =========================
+# MEMORY
+# =========================
+st.session_state.log.append({
+    "state": state,
+    "risk": risk_label,
+    "conf": conf,
+    "signal": signal
+})
 
 # =========================
 # DASHBOARD
@@ -118,14 +215,18 @@ exec_report = execute(state, exposure)
 c1, c2, c3 = st.columns(3)
 
 c1.metric("STATE", state)
-c2.metric("CONFIDENCE", round(conf, 3))
-c3.metric("RISK STATUS", risk_status)
+c2.metric("RISK", risk_label)
+c3.metric("CONFIDENCE", round(conf, 3))
 
-st.metric("EXPOSURE", exposure)
-st.metric("VOLATILITY", round(vol, 4))
+st.metric("VOLATILITY", round(vol, 5))
+st.metric("POSITION SIZE", size)
+st.metric("TRADES THIS SESSION", st.session_state.trade_count)
 
 st.subheader("📊 Market + Signal")
 st.line_chart(data.set_index("time")[["price", "score"]])
 
-st.subheader("⚙️ Execution Layer")
-st.json(exec_report)
+st.subheader("🚀 EXECUTION")
+st.json(trade_result)
+
+st.subheader("🧠 SYSTEM LOG")
+st.write(st.session_state.log[-20:])
