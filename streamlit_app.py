@@ -2,217 +2,221 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
-import os
 import sqlite3
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
+from datetime import datetime
 
 # =========================
 # CONFIG
 # =========================
-ASSET_MAP = {
-    "XRP": "ripple",
-    "BTC": "bitcoin",
-    "ETH": "ethereum"
-}
+st.set_page_config(page_title="Zenith v1.2", layout="wide")
 
-DISCORD_WEBHOOK = os.getenv("WEBHOOK_URL", None)
+API_URL = "https://api.coingecko.com/api/v3/coins/ripple/market_chart"
 
-DB_PATH = "zenith_memory.db"
+DB_NAME = "zenith_memory.db"
 
+DISCORD_WEBHOOK = st.secrets.get("DISCORD_WEBHOOK", None)
 
 # =========================
 # MEMORY LAYER (SQLite)
 # =========================
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS signals (
-            timestamp TEXT,
-            asset TEXT,
+            time TEXT,
+            price REAL,
             state TEXT,
-            score REAL,
-            price REAL
+            score REAL
         )
     """)
     conn.commit()
     conn.close()
 
-def log_signal(asset, state, score, price):
-    conn = sqlite3.connect(DB_PATH)
+def log_signal(price, state, score):
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute(
-        "INSERT INTO signals VALUES (datetime('now'), ?, ?, ?, ?)",
-        (asset, state, score, price)
+        "INSERT INTO signals VALUES (?, ?, ?, ?)",
+        (str(datetime.utcnow()), float(price), state, float(score))
     )
     conn.commit()
     conn.close()
 
-
-# =========================
-# ALERT SYSTEM
-# =========================
-def send_alert(state, price, score, asset):
-    if not DISCORD_WEBHOOK:
-        return
-    try:
-        requests.post(DISCORD_WEBHOOK, json={
-            "content": f"""
-📡 ZENITH ALERT
-Asset: {asset}
-State: {state}
-Price: ${price:.4f}
-Score: {score:.4f}
-"""
-        }, timeout=5)
-    except:
-        pass
-
-
-# =========================
-# ENGINE (CORE INTELLIGENCE)
-# =========================
-class ZenithEngine:
-    def __init__(self):
-        self.model = IsolationForest(
-            n_estimators=250,
-            contamination=0.04,
-            random_state=42
-        )
-        self.scaler = StandardScaler()
-        self.prev_state = "EQUILIBRIUM"
-
-    def features(self, df):
-        df = df.copy()
-
-        df["log_return"] = np.log(df["Price"]).diff()
-        df["volatility"] = df["log_return"].rolling(20).std()
-        df["momentum"] = df["Price"].diff(5)
-        df["range"] = (df["Price"] - df["Price"].rolling(20).min()) / (
-            df["Price"].rolling(20).max() - df["Price"].rolling(20).min() + 1e-9
-        )
-
-        return df.dropna()
-
-    def analyze(self, df):
-        df = self.features(df)
-
-        X = self.scaler.fit_transform(
-            df[["log_return", "volatility", "momentum", "range"]]
-        )
-
-        self.model.fit(X)
-
-        df["raw_score"] = -self.model.decision_function(X)
-
-        # normalize score
-        df["score"] = (df["raw_score"] - df["raw_score"].min()) / (
-            df["raw_score"].max() - df["raw_score"].min() + 1e-9
-        )
-
-        df["anomaly"] = self.model.predict(X)
-
-        last = df.iloc[-1]
-
-        # =========================
-        # REGIME LOGIC
-        # =========================
-        if last["anomaly"] == -1:
-            state = "EXPANSION" if last["momentum"] > 0 else "DISTRIBUTION"
-        else:
-            state = "EQUILIBRIUM"
-
-        confidence = float(df["score"].iloc[-1])
-
-        # =========================
-        # STABILITY FILTER
-        # =========================
-        if state == self.prev_state and confidence < 0.55:
-            state = "EQUILIBRIUM"
-
-        self.prev_state = state
-
-        return df, state, confidence
-
+def load_signals():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql("SELECT * FROM signals", conn)
+    conn.close()
+    return df
 
 # =========================
 # DATA LAYER
 # =========================
 @st.cache_data(ttl=60)
-def load(asset):
-    coin = ASSET_MAP.get(asset, "ripple")
+def load_data(days=180):
+    r = requests.get(API_URL, params={"vs_currency": "usd", "days": days}, timeout=10).json()
 
-    url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart"
-    params = {"vs_currency": "usd", "days": 30}
-
-    try:
-        r = requests.get(url, params=params, timeout=10).json()
-        df = pd.DataFrame(r["prices"], columns=["ts", "Price"])
-        df["Date"] = pd.to_datetime(df["ts"], unit="ms")
-        return df
-    except:
-        return pd.DataFrame({
-            "Date": pd.date_range(end=pd.Timestamp.now(), periods=30),
-            "Price": np.linspace(1, 1.5, 30)
-        })
-
+    df = pd.DataFrame(r["prices"], columns=["ts", "price"])
+    df["time"] = pd.to_datetime(df["ts"], unit="ms")
+    return df
 
 # =========================
-# BACKTEST (LIGHTWEIGHT SELF CHECK)
+# FEATURES
 # =========================
-def quick_backtest(df):
-    return {
-        "trend": "UP" if df["Price"].iloc[-1] > df["Price"].iloc[0] else "DOWN",
-        "volatility": float(df["Price"].pct_change().std())
+def features(df):
+    df = df.copy()
+
+    df["log_return"] = np.log(df["price"]).diff()
+    df["volatility"] = df["log_return"].rolling(20).std()
+    df["momentum"] = df["price"].diff(5)
+    df["trend"] = df["price"].rolling(10).mean() - df["price"].rolling(30).mean()
+
+    return df.dropna()
+
+# =========================
+# ORACLE ENGINE
+# =========================
+class ZenithEngine:
+    def __init__(self):
+        self.model = IsolationForest(
+            n_estimators=200,
+            contamination=0.04,
+            random_state=42
+        )
+        self.scaler = StandardScaler()
+
+        self.history = []
+
+    def analyze(self, df):
+        df = features(df)
+
+        X = self.scaler.fit_transform(df[["log_return", "volatility", "momentum", "trend"]])
+        self.model.fit(X)
+
+        df["anomaly"] = self.model.predict(X)
+        df["score"] = -self.model.decision_function(X)
+
+        last = df.iloc[-1]
+
+        if last["anomaly"] == -1:
+            if last["momentum"] > 0:
+                state = "EXPANSION"
+                bias = 1
+            else:
+                state = "DISTRIBUTION"
+                bias = -1
+        else:
+            state = "EQUILIBRIUM"
+            bias = 0
+
+        self.history.append(bias)
+        if len(self.history) > 200:
+            self.history.pop(0)
+
+        confidence = np.mean(np.abs(self.history)) if self.history else 0
+
+        return df, state, float(last["score"]), confidence, float(last["price"])
+
+# =========================
+# ALERT SYSTEM
+# =========================
+def send_alert(state, price, score):
+    if not DISCORD_WEBHOOK:
+        return
+
+    if state == "EQUILIBRIUM":
+        return
+
+    payload = {
+        "content": f"🧠 ZENITH ALERT\nSTATE: {state}\nPRICE: {price:.4f}\nSCORE: {score:.3f}"
     }
 
+    try:
+        requests.post(DISCORD_WEBHOOK, json=payload, timeout=5)
+    except:
+        pass
 
 # =========================
-# APP
+# BACKTEST (SIMPLE EDGE CHECK)
 # =========================
-st.set_page_config(page_title="Zenith v2", layout="wide")
+def backtest(df):
+    df = features(df)
 
-st.title("📡 ZENITH v2 — FULL PRODUCTION SYSTEM")
+    engine = ZenithEngine()
 
+    results = []
+
+    for i in range(100, len(df)):
+        window = df.iloc[:i]
+
+        try:
+            _, state, score, _, price = engine.analyze(window)
+
+            future = df.iloc[i]["price"]
+            forward_return = (future - price) / price
+
+            results.append([state, score, forward_return])
+
+        except:
+            continue
+
+    out = pd.DataFrame(results, columns=["state", "score", "return"])
+
+    return out
+
+# =========================
+# INIT
+# =========================
 init_db()
 
-asset = st.selectbox("Asset", list(ASSET_MAP.keys()))
-
 engine = ZenithEngine()
+df = load_data()
 
-df = load(asset)
-data, state, confidence = engine.analyze(df)
+data, state, score, confidence, price = engine.analyze(df)
 
-price = df["Price"].iloc[-1]
-
-# memory log
-log_signal(asset, state, confidence, price)
-
-# alert only strong expansion
-if state == "EXPANSION" and confidence > 0.65:
-    send_alert(state, price, confidence, asset)
-
-# backtest snapshot
-bt = quick_backtest(df)
+log_signal(price, state, score)
+send_alert(state, price, score)
 
 # =========================
-# DASHBOARD
+# UI
 # =========================
+st.title("🧠 Zenith v1.2 — Market Sensor System")
+
 c1, c2, c3, c4 = st.columns(4)
 
-c1.metric("State", state)
-c2.metric("Confidence", f"{confidence:.2f}")
-c3.metric("Price", f"${price:.4f}")
-c4.metric("Trend", bt["trend"])
+c1.metric("Price", f"${price:.4f}")
+c2.metric("State", state)
+c3.metric("Anomaly Score", round(score, 4))
+c4.metric("Confidence", round(confidence, 3))
 
 st.divider()
 
 st.subheader("Market Structure")
-st.line_chart(data.set_index("Date")[["Price", "score"]])
+st.line_chart(data.set_index("time")[["price", "score"]])
 
-st.subheader("System Memory (Last 10 Signals)")
-conn = sqlite3.connect(DB_PATH)
-history = pd.read_sql("SELECT * FROM signals ORDER BY timestamp DESC LIMIT 10", conn)
-st.dataframe(history)
-conn.close()
+# =========================
+# MEMORY VIEW
+# =========================
+st.subheader("Signal Memory (SQLite)")
+mem = load_signals()
+st.dataframe(mem.tail(50))
+
+# =========================
+# BACKTEST PANEL
+# =========================
+if st.button("Run Backtest (Last 180 Days)"):
+    bt = backtest(load_data(180))
+
+    st.subheader("Backtest Results")
+
+    st.write("Avg Return when EXPANSION:")
+    st.write(bt[bt["state"] == "EXPANSION"]["return"].mean())
+
+    st.write("Avg Return when DISTRIBUTION:")
+    st.write(bt[bt["state"] == "DISTRIBUTION"]["return"].mean())
+
+    st.line_chart(bt["return"])
+
+st.caption(f"Zenith v1.2 | {datetime.utcnow()} UTC")
