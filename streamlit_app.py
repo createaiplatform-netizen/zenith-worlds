@@ -1,15 +1,27 @@
-# streamlit_app.py
-import streamlit as st
-import requests
+# brain.py
+import alpaca_trade_api as tradeapi
+import numpy as np
 
-st.title("🧠 AI Brain Dashboard")
+class Brain:
 
-api_url = st.text_input("Backend URL", "http://localhost:8000")
+    def __init__(self, api):
+        self.api = api
 
-if st.button("Start Brain Cycle"):
-    r = requests.post(f"{api_url}/cycle")
-    st.write(r.json())
+    def get_prices(self, symbol):
+        bars = self.api.get_bars(symbol, "1Min", limit=50)
+        return [b.c for b in bars]
 
-if st.button("Get Status"):
-    r = requests.get(f"{api_url}/status")
-    st.write(r.json())
+    def decide(self, prices):
+        prices = np.array(prices)
+
+        if len(prices) < 10:
+            return "HOLD"
+
+        short = prices[-5:].mean()
+        long = prices[-20:].mean()
+
+        if short > long:
+            return "BUY"
+        elif short < long:
+            return "SELL"
+        return "HOLD"
