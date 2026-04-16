@@ -1,31 +1,28 @@
-# engine.py
+# server.py
+from fastapi import FastAPI
+import alpaca_trade_api as tradeapi
 
-class Engine:
+from brain import Brain
+from execution import Executor
+from risk import RiskEngine
+from memory import Memory
+from engine import Engine
 
-    def __init__(self, brain, executor, risk, memory, api):
-        self.brain = brain
-        self.executor = executor
-        self.risk = risk
-        self.memory = memory
-        self.api = api
+app = FastAPI()
 
-    def cycle(self, symbol):
+api = tradeapi.REST("KEY", "SECRET", "https://paper-api.alpaca.markets")
 
-        account = self.api.get_account()
-        cash = float(account.cash)
+brain = Brain(api)
+executor = Executor(api)
+risk = RiskEngine()
+memory = Memory()
 
-        prices = self.brain.get_prices(symbol)
-        decision = self.brain.decide(prices)
+engine = Engine(brain, executor, risk, memory, api)
 
-        price = prices[-1]
-        qty = self.risk.position_size(cash, price)
+@app.post("/cycle")
+def cycle():
+    return engine.cycle("AAPL")
 
-        if decision == "BUY":
-            self.executor.buy(symbol, qty)
-            self.memory.log(symbol, "BUY", qty)
-
-        elif decision == "SELL":
-            self.executor.sell(symbol, qty)
-            self.memory.log(symbol, "SELL", qty)
-
-        return {"decision": decision, "qty": qty}
+@app.get("/status")
+def status():
+    return {"status": "AI Brain Active"}
