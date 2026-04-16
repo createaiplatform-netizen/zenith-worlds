@@ -17,7 +17,7 @@ INTERVAL = 30  # seconds
 MAX_TRADE_USD = 100
 MAX_DAILY_LOSS = -200
 
-LIVE_TRADING = False  # SAFE MODE (DO NOT CHANGE YET)
+LIVE_TRADING = False  # SAFE MODE
 
 # =========================
 # SYSTEM STATE
@@ -35,9 +35,10 @@ def get_data():
     r = requests.get(
         "https://api.coingecko.com/api/v3/coins/ripple/market_chart",
         params={"vs_currency": "usd", "days": 1}
-    ).json()
+    )
+    data = r.json()
 
-    df = pd.DataFrame(r["prices"], columns=["ts", "price"])
+    df = pd.DataFrame(data["prices"], columns=["ts", "price"])
     return df
 
 # =========================
@@ -93,7 +94,6 @@ def execute_trade(signal, price):
     if not LIVE_TRADING:
         return f"PAPER TRADE → {signal} | qty={round(qty,4)}"
 
-    # LIVE MODE (disabled by default)
     import alpaca_trade_api as tradeapi
 
     api = tradeapi.REST(
@@ -122,36 +122,43 @@ def log_event(event):
         f.write(json.dumps(event) + "\n")
 
 # =========================
-# MAIN LOOP (24/7 ENGINE)
+# ENGINE LOOP
 # =========================
-print("ZENITH ENGINE STARTED")
+def run_engine():
+    print("ZENITH ENGINE STARTED")
 
-while True:
-    try:
-        df = get_data()
+    while True:
+        try:
+            df = get_data()
 
-        signal, price, score = generate_signal(df)
+            signal, price, score = generate_signal(df)
 
-        allowed, reason = risk_check(signal, price)
+            allowed, reason = risk_check(signal, price)
 
-        if allowed and signal != "HOLD":
-            result = execute_trade(signal, price)
-            state["trades"] += 1
-        else:
-            result = f"BLOCKED → {reason}"
+            if allowed and signal != "HOLD":
+                result = execute_trade(signal, price)
+                state["trades"] += 1
+            else:
+                result = f"BLOCKED → {reason}"
 
-        log_event({
-            "signal": signal,
-            "price": float(price),
-            "score": score,
-            "result": result,
-            "trades": state["trades"]
-        })
+            log_event({
+                "signal": signal,
+                "price": float(price),
+                "score": score,
+                "result": result,
+                "trades": state["trades"]
+            })
 
-        print(signal, price, score, result)
+            print(signal, price, score, result)
 
-        time.sleep(INTERVAL)
+            time.sleep(INTERVAL)
 
-    except Exception as e:
-        log_event({"error": str(e)})
-        time.sleep(10)
+        except Exception as e:
+            log_event({"error": str(e)})
+            time.sleep(10)
+
+# =========================
+# ENTRY POINT (RENDER SAFE)
+# =========================
+if __name__ == "__main__":
+    run_engine()
