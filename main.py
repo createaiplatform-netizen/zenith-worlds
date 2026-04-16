@@ -1,15 +1,28 @@
 from fastapi import FastAPI
 import alpaca_trade_api as tradeapi
 import numpy as np
+import os
 
 app = FastAPI()
 
+# =========================
+# ALPACA CONNECTION
+# =========================
+
+API_KEY = os.getenv("ALPACA_API_KEY")
+API_SECRET = os.getenv("ALPACA_API_SECRET")
+BASE_URL = "https://paper-api.alpaca.markets"
+
 api = tradeapi.REST(
-    "API_KEY",
-    "API_SECRET",
-    "https://paper-api.alpaca.markets",
+    API_KEY,
+    API_SECRET,
+    BASE_URL,
     api_version="v2"
 )
+
+# =========================
+# AI BRAIN
+# =========================
 
 def brain(prices):
     prices = np.array(prices)
@@ -28,6 +41,9 @@ def brain(prices):
         return "SELL"
     return "HOLD"
 
+# =========================
+# AUTONOMOUS CYCLE ENDPOINT
+# =========================
 
 @app.get("/cycle")
 def cycle(symbol: str = "AAPL"):
@@ -39,6 +55,7 @@ def cycle(symbol: str = "AAPL"):
     prices = [b.c for b in bars]
 
     decision = brain(prices)
+
     price = prices[-1]
     qty = max(int((cash * 0.05) / price), 1)
 
@@ -51,5 +68,11 @@ def cycle(symbol: str = "AAPL"):
     return {
         "symbol": symbol,
         "decision": decision,
-        "qty": qty
+        "qty": qty,
+        "price": price
     }
+
+
+@app.get("/status")
+def status():
+    return {"status": "AI backend running"}
