@@ -5,40 +5,32 @@ st.title("📊 Trading Dashboard")
 
 st.write("App is running")
 
-# =========================
-# SECRETS
-# =========================
-
 API_KEY = st.secrets.get("APCA_API_KEY_ID")
 API_SECRET = st.secrets.get("APCA_API_SECRET_KEY")
 BASE_URL = st.secrets.get("BASE_URL", "https://paper-api.alpaca.markets")
 
 st.write("Keys loaded:", bool(API_KEY and API_SECRET))
 
-# =========================
-# CONNECT SAFE
-# =========================
-
 api = None
 
-try:
-    if API_KEY and API_SECRET:
-        api = tradeapi.REST(
-            API_KEY,
-            API_SECRET,
-            base_url=BASE_URL,
-            api_version="v2"
-        )
-        st.success("Client created")
-    else:
-        st.warning("Missing API keys")
+# =========================
+# CREATE CLIENT
+# =========================
 
+try:
+    api = tradeapi.REST(
+        API_KEY,
+        API_SECRET,
+        base_url=BASE_URL,
+        api_version="v2"
+    )
+    st.success("Client created")
 except Exception as e:
-    st.error("Failed to create Alpaca client")
+    st.error("Client creation failed")
     st.write(e)
 
 # =========================
-# ACCOUNT SAFE CALL
+# SAFE ACCOUNT CALL
 # =========================
 
 if api:
@@ -53,7 +45,9 @@ if api:
         st.write("Cash:", account.cash)
 
     except Exception as e:
-        st.error("Alpaca rejected request")
-        st.write(e)
+        st.error("ALPACA REJECTED REQUEST")
+
+        st.write("Error type:", type(e).__name__)
+        st.write("Error details:", str(e))
 
 st.button("Refresh")
