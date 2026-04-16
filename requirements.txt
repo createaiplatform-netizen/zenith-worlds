@@ -1,6 +1,6 @@
-streamlit
-pandas
-numpy
-scikit-learn
-requests
+fastapi
+uvicorn
 alpaca-trade-api
+numpy
+requests
+streamlit
