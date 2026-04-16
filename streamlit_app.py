@@ -1,23 +1,31 @@
-# memory.py
-import sqlite3
-from datetime import datetime
+# engine.py
 
-class Memory:
+class Engine:
 
-    def __init__(self):
-        self.conn = sqlite3.connect("brain.db", check_same_thread=False)
-        self.conn.execute("""
-        CREATE TABLE IF NOT EXISTS trades (
-            time TEXT,
-            symbol TEXT,
-            side TEXT,
-            qty INTEGER
-        )
-        """)
+    def __init__(self, brain, executor, risk, memory, api):
+        self.brain = brain
+        self.executor = executor
+        self.risk = risk
+        self.memory = memory
+        self.api = api
 
-    def log(self, symbol, side, qty):
-        self.conn.execute(
-            "INSERT INTO trades VALUES (?, ?, ?, ?)",
-            (str(datetime.now()), symbol, side, qty)
-        )
-        self.conn.commit()
+    def cycle(self, symbol):
+
+        account = self.api.get_account()
+        cash = float(account.cash)
+
+        prices = self.brain.get_prices(symbol)
+        decision = self.brain.decide(prices)
+
+        price = prices[-1]
+        qty = self.risk.position_size(cash, price)
+
+        if decision == "BUY":
+            self.executor.buy(symbol, qty)
+            self.memory.log(symbol, "BUY", qty)
+
+        elif decision == "SELL":
+            self.executor.sell(symbol, qty)
+            self.memory.log(symbol, "SELL", qty)
+
+        return {"decision": decision, "qty": qty}
