@@ -2,11 +2,11 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Zenith OS v7</title>
+  <title>Zenith OS FINAL</title>
   <style>
     body{
       margin:0;
-      background:#05070a;
+      background:#020405;
       color:#00ff88;
       font-family: monospace;
       display:flex;
@@ -15,12 +15,21 @@
       height:100vh;
     }
 
-    .box{
-      width:620px;
+    .grid{
+      width:680px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+
+    .panel{
       border:1px solid #00ff88;
-      padding:20px;
+      padding:15px;
       border-radius:10px;
-      transition:0.2s;
+    }
+
+    .full{
+      grid-column: span 2;
     }
 
     .title{
@@ -35,12 +44,6 @@
       margin:10px 0;
     }
 
-    .row{
-      display:flex;
-      justify-content:space-between;
-      margin:5px 0;
-    }
-
     canvas{
       width:100%;
       height:150px;
@@ -51,7 +54,7 @@
     select, button{
       width:100%;
       padding:10px;
-      margin-top:10px;
+      margin-top:8px;
       border:none;
       background:#00ff88;
       color:#000;
@@ -59,41 +62,61 @@
       cursor:pointer;
     }
 
+    .log{
+      height:120px;
+      overflow:auto;
+      font-size:12px;
+      border:1px solid #00ff88;
+      padding:10px;
+    }
+
     .alert{
       text-align:center;
       margin-top:10px;
-      font-size:14px;
     }
   </style>
 </head>
 
 <body>
 
-<div class="box" id="panel">
-  <div class="title">ZENITH OS v7 (ALERT ENGINE)</div>
+<div class="grid">
 
-  <select id="asset" onchange="changeAsset()">
-    <option value="XRP">XRP</option>
-    <option value="BTC">BTC</option>
-    <option value="ETH">ETH</option>
-  </select>
+  <div class="panel full">
+    <div class="title">ZENITH OS — CORE SYSTEM</div>
+  </div>
 
-  <div class="big" id="price">PRICE: --</div>
-  <div class="big" id="signal">SIGNAL: --</div>
+  <div class="panel">
+    <select id="asset" onchange="changeAsset()">
+      <option value="XRP">XRP</option>
+      <option value="BTC">BTC</option>
+      <option value="ETH">ETH</option>
+    </select>
 
-  <div class="row"><span>Asset</span><span id="currentAsset">XRP</span></div>
+    <div class="big" id="price">PRICE: --</div>
+    <div class="big" id="signal">SIGNAL: --</div>
 
-  <button onclick="toggleMode()">TOGGLE MODE</button>
+    <button onclick="toggleMode()">TOGGLE MODE</button>
 
-  <canvas id="chart"></canvas>
+    <div class="alert" id="alert">STATUS: NORMAL</div>
+  </div>
 
-  <div class="alert" id="alert">STATUS: NORMAL</div>
+  <div class="panel">
+    <div class="title">MARKET CHART</div>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="panel full">
+    <div class="title">SYSTEM LOG</div>
+    <div class="log" id="log"></div>
+  </div>
+
 </div>
 
 <script>
 let mode = "AUTO";
 let asset = "XRP";
 let prices = [];
+let log = [];
 
 const canvas = document.getElementById("chart");
 const ctx = canvas.getContext("2d");
@@ -108,6 +131,7 @@ window.onresize = resize;
 function changeAsset(){
   asset = document.getElementById("asset").value;
   prices = [];
+  log = [];
 }
 
 function toggleMode(){
@@ -117,7 +141,6 @@ function toggleMode(){
 function drawChart(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.beginPath();
-  ctx.strokeStyle = "#00ff88";
 
   for(let i=0;i<prices.length;i++){
     let x = (i / prices.length) * canvas.width;
@@ -127,25 +150,16 @@ function drawChart(){
     else ctx.lineTo(x,y);
   }
 
+  ctx.strokeStyle = "#00ff88";
   ctx.stroke();
 }
 
 function setAlert(signal){
-  const panel = document.getElementById("panel");
   const alert = document.getElementById("alert");
 
-  if(signal === "BUY"){
-    panel.style.border = "2px solid #00ff88";
-    alert.innerText = "ALERT: BUY SIGNAL";
-  }
-  else if(signal === "SELL"){
-    panel.style.border = "2px solid #ff0044";
-    alert.innerText = "ALERT: SELL SIGNAL";
-  }
-  else{
-    panel.style.border = "1px solid #00ff88";
-    alert.innerText = "STATUS: NORMAL";
-  }
+  if(signal === "BUY") alert.innerText = "ALERT: BUY PRESSURE";
+  else if(signal === "SELL") alert.innerText = "ALERT: SELL PRESSURE";
+  else alert.innerText = "STATUS: STABLE";
 }
 
 function tick(){
@@ -156,7 +170,7 @@ function tick(){
   const price = base * (1 + change);
 
   prices.push(price);
-  if(prices.length > 50) prices.shift();
+  if(prices.length > 60) prices.shift();
 
   let signal = "HOLD";
 
@@ -167,9 +181,14 @@ function tick(){
     signal = "MANUAL";
   }
 
+  const entry = `${asset} | ${price.toFixed(2)} | ${signal}`;
+  log.push(entry);
+  if(log.length > 40) log.shift();
+
   document.getElementById("price").innerText = "PRICE: " + price.toFixed(2);
   document.getElementById("signal").innerText = "SIGNAL: " + signal;
-  document.getElementById("currentAsset").innerText = asset;
+
+  document.getElementById("log").innerHTML = log.join("<br>");
 
   drawChart();
   setAlert(signal);
