@@ -1,30 +1,117 @@
+import os
 import time
-import random
-import json
+import requests
+from datetime import datetime
 
-print("ZENITH SIMULATION STARTED")
+# =========================
+# CONFIG
+# =========================
 
-state = []
+SYMBOL = "XRP-USD"
+INTERVAL = 30
 
-while True:
-    price = round(random.uniform(0.5, 1.5), 4)
+MAX_TRADE_USD = 50
+LIVE_TRADING = False  # KEEP FALSE UNTIL TESTED
 
-    if price > 1.2:
-        signal = "BUY"
-    elif price < 0.8:
-        signal = "SELL"
-    else:
-        signal = "HOLD"
+# =========================
+# STATE
+# =========================
 
-    entry = {
-        "time": time.time(),
-        "price": price,
-        "signal": signal
+state = {
+    "trades": 0,
+    "last_price": None
+}
+
+# =========================
+# MARKET DATA (REAL)
+# =========================
+
+def get_price():
+    url = "https://api.coinbase.com/v2/prices/XRP-USD/spot"
+    r = requests.get(url).json()
+    return float(r["data"]["amount"])
+
+# =========================
+# STRATEGY ENGINE (REAL LOGIC BASELINE)
+# =========================
+
+def generate_signal(price):
+    if state["last_price"] is None:
+        return "HOLD"
+
+    change = (price - state["last_price"]) / state["last_price"]
+
+    if change > 0.01:
+        return "BUY"
+    elif change < -0.01:
+        return "SELL"
+    return "HOLD"
+
+# =========================
+# EXECUTION ENGINE
+# =========================
+
+def execute_trade(signal, price):
+    if signal == "HOLD":
+        return "NO TRADE"
+
+    qty = MAX_TRADE_USD / price
+
+    if not LIVE_TRADING:
+        return f"PAPER TRADE: {signal} {qty:.4f} XRP @ {price}"
+
+    # REAL TRADING (example: Coinbase Advanced Trade API placeholder)
+    api_key = os.getenv("COINBASE_API_KEY")
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
     }
 
-    state.append(entry)
+    order = {
+        "product_id": SYMBOL,
+        "side": signal.lower(),
+        "order_configuration": {
+            "market_market_ioc": {
+                "base_size": str(qty)
+            }
+        }
+    }
 
-    # show output in GitHub "Actions" logs if run there
-    print(json.dumps(entry))
+    # NOTE: endpoint depends on Coinbase setup
+    r = requests.post(
+        "https://api.coinbase.com/api/v3/brokerage/orders",
+        json=order,
+        headers=headers
+    )
 
-    time.sleep(3)
+    return r.text
+
+# =========================
+# LOOP
+# =========================
+
+print("ZENITH REAL TRADING ENGINE STARTED")
+
+while True:
+    try:
+        price = get_price()
+        signal = generate_signal(price)
+
+        result = execute_trade(signal, price)
+
+        state["last_price"] = price
+        state["trades"] += 1
+
+        print({
+            "time": str(datetime.utcnow()),
+            "price": price,
+            "signal": signal,
+            "result": result
+        })
+
+        time.sleep(INTERVAL)
+
+    except Exception as e:
+        print("ERROR:", e)
+        time.sleep(5)
