@@ -1,24 +1,13 @@
-# execution.py
+# risk.py
 
-class Executor:
+class RiskEngine:
 
-    def __init__(self, api):
-        self.api = api
+    def __init__(self):
+        self.max_daily_loss = -200
+        self.exposure_limit = 0.2
 
-    def buy(self, symbol, qty):
-        return self.api.submit_order(
-            symbol=symbol,
-            qty=qty,
-            side="buy",
-            type="market",
-            time_in_force="day"
-        )
+    def allow_trade(self, pnl):
+        return pnl > self.max_daily_loss
 
-    def sell(self, symbol, qty):
-        return self.api.submit_order(
-            symbol=symbol,
-            qty=qty,
-            side="sell",
-            type="market",
-            time_in_force="day"
-        )
+    def position_size(self, cash, price):
+        return max(int((cash * self.exposure_limit) / price), 1)
