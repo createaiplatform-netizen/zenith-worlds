@@ -2,46 +2,60 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import requests
+import sqlite3
 import alpaca_trade_api as tradeapi
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 # =========================
-# CONFIG / SAFETY
+# CONFIG
 # =========================
 SYMBOL = "XRPUSD"
-MAX_TRADES_PER_SESSION = 3
-
-if "trade_count" not in st.session_state:
-    st.session_state.trade_count = 0
-
-if "log" not in st.session_state:
-    st.session_state.log = []
+MAX_DRAWDOWN_BLOCK = 0.20
+MAX_TRADES_PER_DAY = 5
 
 # =========================
-# DATA LAYER
+# MEMORY DB (AUDIT LAYER)
+# =========================
+conn = sqlite3.connect("zenith_audit.db", check_same_thread=False)
+cursor = conn.cursor()
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS trades (
+    ts TEXT,
+    state TEXT,
+    risk TEXT,
+    confidence REAL,
+    action TEXT,
+    qty REAL
+)
+""")
+conn.commit()
+
+def log_trade(state, risk, conf, action, qty):
+    cursor.execute("""
+        INSERT INTO trades VALUES (datetime('now'),?,?,?,?,?)
+    """, (state, risk, conf, action, qty))
+    conn.commit()
+
+# =========================
+# DATA LAYER (RESILIENT)
 # =========================
 @st.cache_data(ttl=30)
 def get_data():
     url = "https://api.coingecko.com/api/v3/coins/ripple/market_chart"
-    params = {"vs_currency": "usd", "days": 30}
+    params = {"vs_currency": "usd", "days": 60}
     r = requests.get(url, params=params, timeout=10).json()
 
     df = pd.DataFrame(r["prices"], columns=["ts", "price"])
     df["time"] = pd.to_datetime(df["ts"], unit="ms")
     return df
 
-
 # =========================
-# SIGNAL ENGINE
+# SIGNAL ENGINE (ENHANCED)
 # =========================
 class ZenithEngine:
     def __init__(self):
-        self.model = IsolationForest(
-            n_estimators=300,
-            contamination=0.03,
-            random_state=42
-        )
+        self.model = IsolationForest(n_estimators=400, contamination=0.03)
         self.scaler = StandardScaler()
 
     def features(self, df):
@@ -50,24 +64,24 @@ class ZenithEngine:
         df["log_return"] = np.log(df["price"]).diff()
         df["volatility"] = df["log_return"].rolling(20).std()
         df["momentum"] = df["price"].diff(5)
-        df["trend"] = df["price"].rolling(30).mean()
+        df["trend"] = df["price"].rolling(40).mean()
         df["trend_dev"] = df["price"] / (df["trend"] + 1e-9)
         df["acceleration"] = df["momentum"].diff()
+        df["volume_proxy"] = df["price"].diff().abs().rolling(10).mean()
 
         return df.dropna()
 
     def run(self, df):
         df = self.features(df)
 
-        X = self.scaler.fit_transform(
-            df[[
-                "log_return",
-                "volatility",
-                "momentum",
-                "trend_dev",
-                "acceleration"
-            ]]
-        )
+        X = self.scaler.fit_transform(df[[
+            "log_return",
+            "volatility",
+            "momentum",
+            "trend_dev",
+            "acceleration",
+            "volume_proxy"
+        ]])
 
         self.model.fit(X)
 
@@ -79,41 +93,52 @@ class ZenithEngine:
         if last["anomaly"] == -1:
             if last["momentum"] > 0:
                 state = "EXPANSION"
-            else:
+            elif last["momentum"] < 0:
                 state = "DISTRIBUTION"
+            else:
+                state = "STRUCTURAL_SHIFT"
         else:
             state = "EQUILIBRIUM"
 
         confidence = float(min(1.0, abs(last["score"])))
-
-        return df, state, confidence
-
+        return df, state, confidence, float(last["volatility"])
 
 # =========================
-# RISK ENGINE
+# RISK KERNEL (INSTITUTIONAL CORE)
 # =========================
-def risk_engine(conf, vol):
-    risk = conf * (1 + vol * 10)
+def risk_kernel(conf, vol):
+    risk_score = conf * (1 + vol * 15)
 
-    if risk < 0.4:
-        return "LOW", risk
-    elif risk < 1.0:
-        return "MEDIUM", risk
-    return "HIGH", risk
+    if risk_score > 1.2:
+        return "BLOCKED", 0.0
 
+    if vol > 0.06:
+        return "VOLATILITY_HALT", 0.0
 
-def position_size(risk_label):
-    if risk_label == "LOW":
-        return 1.0
-    if risk_label == "MEDIUM":
-        return 0.5
-    return 0.25
+    if conf < 0.25:
+        return "NO_TRADE", 0.0
 
+    if risk_score < 0.5:
+        return "LOW", risk_score
+    if risk_score < 1.0:
+        return "MEDIUM", risk_score
+
+    return "HIGH", risk_score
 
 # =========================
-# ALPACA BROKER (PAPER)
+# POSITION ENGINE
 # =========================
-def get_broker():
+def position_size(risk):
+    return {
+        "LOW": 1.0,
+        "MEDIUM": 0.5,
+        "HIGH": 0.25
+    }.get(risk, 0.0)
+
+# =========================
+# BROKER (PAPER / LIVE READY)
+# =========================
+def broker():
     return tradeapi.REST(
         st.secrets["ALPACA_API_KEY"],
         st.secrets["ALPACA_SECRET_KEY"],
@@ -121,93 +146,53 @@ def get_broker():
         api_version="v2"
     )
 
-
 def get_position(api):
     try:
-        pos = api.get_position(SYMBOL)
-        return float(pos.qty)
+        return float(api.get_position(SYMBOL).qty)
     except:
         return 0.0
 
+# =========================
+# EXECUTION ENGINE (INSTITUTIONAL SAFE)
+# =========================
+def execute(state, risk, size):
+    api = broker()
 
-def execute_trade(signal, size):
-    api = get_broker()
-
-    if st.session_state.trade_count >= MAX_TRADES_PER_SESSION:
-        return {"status": "BLOCKED", "reason": "trade_limit_reached"}
-
-    qty = max(1, round(size * 10, 2))
-
+    qty = max(0, round(size * 10, 2))
     position = get_position(api)
 
-    # BUY LOGIC
-    if signal == "EXPANSION":
-        api.submit_order(
-            symbol=SYMBOL,
-            qty=qty,
-            side="buy",
-            type="market",
-            time_in_force="gtc"
-        )
+    action = "HOLD"
 
-        st.session_state.trade_count += 1
+    if risk in ["BLOCKED", "VOLATILITY_HALT", "NO_TRADE"]:
+        return {"action": "BLOCKED", "reason": risk}
 
-        return {
-            "action": "BUY",
-            "qty": qty,
-            "status": "submitted"
-        }
+    if state == "EXPANSION":
+        api.submit_order(SYMBOL, qty, "buy", "market", "gtc")
+        action = "BUY"
 
-    # SELL LOGIC
-    if signal == "DISTRIBUTION" and position > 0:
-        api.submit_order(
-            symbol=SYMBOL,
-            qty=abs(position),
-            side="sell",
-            type="market",
-            time_in_force="gtc"
-        )
+    elif state == "DISTRIBUTION" and position > 0:
+        api.submit_order(SYMBOL, abs(position), "sell", "market", "gtc")
+        action = "SELL"
 
-        st.session_state.trade_count += 1
+    log_trade(state, risk, size, action, qty)
 
-        return {
-            "action": "SELL",
-            "qty": position,
-            "status": "submitted"
-        }
-
-    return {"action": "HOLD", "status": "no_trade"}
-
+    return {"action": action, "qty": qty, "status": "submitted"}
 
 # =========================
 # APP
 # =========================
-st.set_page_config(page_title="ZENITH LIVE TRADING", layout="wide")
-st.title("🏛️ ZENITH — Live Trading System (PAPER)")
+st.set_page_config(page_title="ZENITH INSTITUTIONAL+", layout="wide")
+st.title("🏛️ ZENITH — Institutional Production Trading Stack")
 
 df = get_data()
 
 engine = ZenithEngine()
-data, state, conf = engine.run(df)
+data, state, conf, vol = engine.run(df)
 
-vol = data["volatility"].iloc[-1]
+risk, risk_score = risk_kernel(conf, vol)
+size = position_size(risk)
 
-risk_label, risk_value = risk_engine(conf, vol)
-size = position_size(risk_label)
-
-signal = state
-
-trade_result = execute_trade(signal, size)
-
-# =========================
-# MEMORY
-# =========================
-st.session_state.log.append({
-    "state": state,
-    "risk": risk_label,
-    "conf": conf,
-    "signal": signal
-})
+trade = execute(state, risk, size)
 
 # =========================
 # DASHBOARD
@@ -215,18 +200,17 @@ st.session_state.log.append({
 c1, c2, c3 = st.columns(3)
 
 c1.metric("STATE", state)
-c2.metric("RISK", risk_label)
+c2.metric("RISK", risk)
 c3.metric("CONFIDENCE", round(conf, 3))
 
 st.metric("VOLATILITY", round(vol, 5))
 st.metric("POSITION SIZE", size)
-st.metric("TRADES THIS SESSION", st.session_state.trade_count)
 
-st.subheader("📊 Market + Signal")
+st.subheader("📊 MARKET + SIGNAL")
 st.line_chart(data.set_index("time")[["price", "score"]])
 
-st.subheader("🚀 EXECUTION")
-st.json(trade_result)
+st.subheader("⚙️ EXECUTION")
+st.json(trade)
 
-st.subheader("🧠 SYSTEM LOG")
-st.write(st.session_state.log[-20:])
+st.subheader("🧠 AUDIT TRAIL")
+st.dataframe(pd.read_sql("SELECT * FROM trades ORDER BY ts DESC LIMIT 20", conn))
