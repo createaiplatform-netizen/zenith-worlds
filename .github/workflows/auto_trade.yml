@@ -1,30 +1,30 @@
-name: Autonomous Trading Bot
+name: Zenith-Worlds Auto Trade
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  trade:
+  trade-job:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
-          pip install alpaca-trade-api numpy requests
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run bot
+      # THE FIX: Point to the 'worker' folder
+      - name: Run Worker
         env:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
-        run: |
-          python worker.py
+        run: python worker/worker.py
