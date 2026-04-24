@@ -19,12 +19,12 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # THE FIX: Point to the 'worker' folder
       - name: Run Worker
         env:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+        # Pointing to the subfolder we found in the previous image
         run: python worker/worker.py
